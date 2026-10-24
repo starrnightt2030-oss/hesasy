@@ -251,7 +251,6 @@ function studentForm(s) {
     <fieldset style="border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px"><legend class="field" style="padding:0;margin-bottom:8px">الصف الدراسي</legend>
       <div class="seg" id="sf-grade">${[1, 2, 3].map(g => `<button type="button" data-g="${g}" class="${g === grade ? 'on' : ''}" ${hasEnr && g !== grade ? 'disabled' : ''}>${['', 'الأول', 'الثاني', 'الثالث'][g]}</button>`).join('')}</div>
       ${hasEnr ? '<span class="small muted">الصف مش بيتغير بعد ما الطالب يشترك في مواد</span>' : ''}</fieldset>
-    <label class="field">تاريخ بدء الحصص<input class="input" type="date" id="sf-start" value="${t}"><span class="hint">${edit ? 'للمواد الجديدة اللي هتضيفها' : 'أول حصة محسوبة على الطالب تبدأ من اليوم ده'}</span></label>
     ${[1, 2, 3].map(g => `<fieldset class="sf-sec" data-g="${g}" ${g !== grade ? 'hidden' : ''} style="border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
       <legend class="field" style="padding:0;margin-bottom:8px">المواد والمجموعات</legend>
       ${E.SUBJECTS.filter(x => x.grade === g).map(sub => {
@@ -261,8 +260,9 @@ function studentForm(s) {
         return `<div class="check-card ${e ? 'on locked' : ''}" data-sub="${sub.id}" data-locked="${e ? 1 : ''}">
           <button type="button" class="check-row" data-act="sfToggle" aria-pressed="${!!e}"><span class="box">${ic('check', 16, 3)}</span><span class="grow b">${esc(sub.name)}</span><span class="small muted">${g === 3 ? money(st.settings.prices.project) : money(st.settings.prices.single)}</span></button>
           <div class="sf-more" ${e ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">
-            ${groups.length ? `<label class="row small muted" style="gap:10px">المجموعة<select class="input select sm grow" data-role="group">${groups.map(gg => `<option value="${gg.id}" ${gg.id === gid ? 'selected' : ''}>${esc(E.groupLabel(st, gg))}</option>`).join('')}</select></label>` : `<div class="banner amber" style="padding:8px 10px">${ic('alert', 16)}<span>مفيش مجموعة للمادة دي. <a href="#/groups">أضف مجموعة</a></span></div>`}
-            ${e ? `<label class="row small muted" style="gap:10px">بدأ من<input class="input sm grow" type="date" data-role="start" value="${e.startDate}"></label><span class="small muted">لإلغاء المادة استخدم "سحب من مادة" من ملف الطالب</span>` : ''}
+            ${groups.length ? `<label class="row small muted" style="gap:10px">المجموعة<select class="input select sm grow" data-role="group" data-change="sfGroup">${groups.map(gg => `<option value="${gg.id}" ${gg.id === gid ? 'selected' : ''}>${esc(E.groupLabel(st, gg))}</option>`).join('')}</select></label>` : `<div class="banner amber" style="padding:8px 10px">${ic('alert', 16)}<span>مفيش مجموعة للمادة دي. <a href="#/groups">أضف مجموعة</a></span></div>`}
+            ${groups.length ? `<label class="row small muted" style="gap:10px">أول حصة<select class="input select sm grow" data-role="start">${firstSessionOptions(gid, e ? e.startDate : null)}</select></label>
+              <span class="small muted">${e ? 'دورة الـ٤ حصص بتتحسب من أول حصة. لإلغاء المادة استخدم "سحب من مادة" من ملف الطالب' : 'اختار أول حصة الطالب حضرها أو هيحضرها — الـ٤ حصص بتتحسب منها'}</span>` : ''}
           </div></div>`;
       }).join('')}</fieldset>`).join('')}
     <div class="grid2"><label class="field">موبايل ولي الأمر<input class="input num" type="tel" inputmode="tel" id="sf-phone" value="${esc(s ? s.phone || '' : '')}" placeholder="اختياري" dir="ltr" style="text-align:right"></label>
@@ -271,6 +271,22 @@ function studentForm(s) {
     <button type="button" class="btn accent lg block" data-act="sfSave">${ic('check', 20, 2.4)} ${edit ? 'حفظ التعديلات' : 'حفظ الطالب'}</button>
   </form>`;
 }
+/* اختيار أول حصة من مواعيد المجموعة الفعلية (من ٨ أسابيع فاتوا لـ ٥ أسابيع جايين) */
+function firstSessionOptions(gid, selected) {
+  if (!gid) return '';
+  const st = App.st, t = E.today(), y = E.addDays(t, -1);
+  const list = E.occurrences(st, gid, E.addDays(t, -56), E.addDays(t, 35)).filter(o => o.status === 'normal');
+  let sel = selected;
+  if (!sel) { const next = list.find(o => o.date >= t); sel = next ? next.date : (list.length ? list[list.length - 1].date : t); }
+  const opts = list.map(o => ({ d: o.date, l: E.fmtDate(o.date) + ' · ' + E.fmtTime(o.time) + (o.date === t ? ' · النهارده' : o.date === y ? ' · امبارح' : o.date < t ? ' · فاتت' : '') + (o.type === 'makeup' ? ' (تعويضية)' : '') }));
+  if (!opts.some(o => o.d === sel)) opts.push({ d: sel, l: E.fmtDate(sel) + ' (التاريخ المسجل)' });
+  opts.sort((a, b) => a.d.localeCompare(b.d));
+  return opts.map(o => `<option value="${o.d}" ${o.d === sel ? 'selected' : ''}>${esc(o.l)}</option>`).join('');
+}
+ACT.sfGroup = el => {
+  const card = el.closest('.check-card'), s = $('[data-role=start]', card);
+  if (s) s.innerHTML = firstSessionOptions(el.value, null);
+};
 Views['student-new'] = () => studentForm(null);
 Views['student-edit'] = id => studentForm(studentById(id));
 Views['student-new_after'] = Views['student-edit_after'] = () => {
@@ -317,7 +333,6 @@ ACT.sfSave = () => {
   if (!id && !cards.length) return toast('اختار مادة واحدة على الأقل', { type: 'err', sound: 'err' });
   for (const c of cards) if (!$('[data-role=group]', c)) return toast('مادة "' + E.SUBJ[c.dataset.sub].name + '" ملهاش مجموعة — أضف مجموعة الأول', { type: 'err', sound: 'err', ms: 4500 });
   const dup = App.st.students.find(s => s.name === name && s.id !== id);
-  const start = $('#sf-start').value || E.today();
   const t = E.today();
   const save = () => {
     let sid = id;
@@ -338,6 +353,7 @@ ACT.sfSave = () => {
             if (!ex.groupHist.length) ex.groupHist.push({ from: ex.startDate, groupId: gid }); else ex.groupHist.push({ from, groupId: gid });
           }
         } else {
+          const start = ($('[data-role=start]', c) || {}).value || E.today();
           s.enrollments.push({ id: E.uid(st), subjectId: c.dataset.sub, groupHist: [{ from: start, groupId: gid }], startDate: start, endDate: null });
         }
       }

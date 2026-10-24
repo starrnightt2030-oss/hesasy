@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.1.0'
+  version: '1.2.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -260,6 +260,14 @@ let lastRoute = '';
 function render() {
   if (!App.unlocked) return;
   const r = route();
+  if (r.name === 'exit-guard') {
+    // زرار الرجوع في الموبايل وهو على الرئيسية: لازم يتداس مرتين علشان التطبيق يتقفل
+    if (Date.now() - (App.ui.exitAt || 0) < 2500) { history.back(); return; }
+    App.ui.exitAt = Date.now();
+    toast('اضغط رجوع تاني للخروج من التطبيق', { type: 'warn', icon: 'logout', ms: 2500 });
+    history.pushState(null, '', '#/home');
+    return render();
+  }
   const V = window.Views[r.name] ? r.name : 'home';
   const key = V + '/' + r.arg;
   const sameRoute = key === lastRoute;

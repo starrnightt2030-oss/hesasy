@@ -146,6 +146,7 @@ async function showLock() {
 let started = false;
 function unlock() {
   $('#lock-root').innerHTML = '';
+  lastActive = Date.now(); App.hiddenAt = 0;
   App.unlocked = true;
   Sound.play('ok');
   render();
@@ -224,7 +225,15 @@ async function dailyBackup() {
   }
 }
 
-/* ---------- القفل التلقائي لما التطبيق يروح في الخلفية ---------- */
+/* ---------- القفل التلقائي ----------
+ * التنقل جوه التطبيق عمره ما بيقفله. القفل بس لما:
+ * التطبيق يتقفل خالص، أو يفضل في الخلفية أكتر من ٣٠ ثانية، أو ٣ دقايق من غير استخدام. */
+const BG_LOCK_MS = 30000, IDLE_LOCK_MS = 180000;
+let lastActive = Date.now();
+['pointerdown', 'keydown', 'scroll', 'touchstart', 'input'].forEach(ev => document.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
+setInterval(() => {
+  if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && !document.hidden && Date.now() - lastActive > IDLE_LOCK_MS) lockApp();
+}, 10000);
 document.addEventListener('visibilitychange', () => {
   if (!App.st) return;
   if (document.hidden) {
@@ -232,7 +241,9 @@ document.addEventListener('visibilitychange', () => {
     Store.flush();
     if (App.revealed) { App.revealed = false; if (App.unlocked) render(); }
   } else {
-    if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && Date.now() - App.hiddenAt > 60000) lockApp();
+    const away = App.hiddenAt ? Date.now() - App.hiddenAt : 0;
+    App.hiddenAt = 0; lastActive = Date.now();
+    if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS) lockApp();
     else if (App.unlocked) { recompute(); render(); checkReminders(); }
   }
 });
@@ -278,6 +289,7 @@ function setupUpdates() {
   Store.persist();
   let saved = null;
   try { saved = await Store.load(); } catch (e) {}
+  if (!location.hash || location.hash === '#/home' || location.hash === '#/exit-guard') { history.replaceState(null, '', '#/exit-guard'); history.pushState(null, '', '#/home'); }
   App.st = migrate(saved);
   recompute();
   App.sec = await Security.get();
