@@ -1,7 +1,8 @@
 /* حصصي — Service Worker: يشغّل التطبيق من غير نت */
-const VERSION = 'hesasy-v1.0.0';
+const VERSION = 'hesasy-v1.0.1';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
+  'css/fonts.css', 'fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2', 'fonts/ibm-plex-sans-arabic-arabic-500-normal.woff2', 'fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2', 'fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2', 'fonts/ibm-plex-sans-arabic-latin-400-normal.woff2', 'fonts/ibm-plex-sans-arabic-latin-500-normal.woff2', 'fonts/ibm-plex-sans-arabic-latin-600-normal.woff2', 'fonts/ibm-plex-sans-arabic-latin-700-normal.woff2', 'fonts/readex-pro-arabic-500-normal.woff2', 'fonts/readex-pro-arabic-600-normal.woff2', 'fonts/readex-pro-arabic-700-normal.woff2', 'fonts/readex-pro-latin-500-normal.woff2', 'fonts/readex-pro-latin-600-normal.woff2', 'fonts/readex-pro-latin-700-normal.woff2',
   'js/engine.js', 'js/store.js', 'js/core.js', 'js/views-main.js', 'js/views-students.js', 'js/views-money.js', 'js/views-settings.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'
 ];
