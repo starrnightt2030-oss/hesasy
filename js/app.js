@@ -41,7 +41,7 @@ async function applyIdentity() {
   if (!p512) return;
   $$('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => { l.href = l.rel === 'icon' ? p192 : p512; });
   const base = new URL('./', location.href).href;
-  const m = { name: s.appName, short_name: s.appName, start_url: base, scope: base, id: base, display: 'standalone', orientation: 'portrait', dir: 'rtl', lang: 'ar', background_color: '#10213A', theme_color: '#10213A',
+  const m = { name: s.appName, short_name: s.appName, start_url: base + 'index.html', scope: base, id: base + '?app=hesasy', display: 'standalone', orientation: 'portrait', dir: 'rtl', lang: 'ar', background_color: '#10213A', theme_color: '#10213A',
     icons: [{ src: p192, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: p512, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: p512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
   if (manifestUrl) URL.revokeObjectURL(manifestUrl);
   manifestUrl = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
