@@ -40,7 +40,8 @@ Views.dues = () => {
       <div class="stack"><span class="small" style="color:var(--on-ink-muted)">اتحصّل</span><span class="num b" style="font-size:19px;color:#6EE7A8">${moneyN(sum.paid)}</span></div>
       <div class="stack"><span class="small" style="color:var(--on-ink-muted)">لسه</span><span class="num b" style="font-size:19px;color:#FFB86B">${moneyN(sum.remaining)}</span></div>
     </div>
-    <div class="row between small" style="color:var(--on-ink-muted);border-top:1px solid rgba(255,255,255,.1);padding-top:10px"><span>متأخرات من قبل الفترة: <b style="color:#FFA3A3">${money(sum.prior)}</b></span><span>كاش اتقبض: <b style="color:#fff">${money(sum.cash)}</b></span></div>
+    <div class="row between small" style="color:var(--on-ink-muted);border-top:1px solid rgba(255,255,255,.1);padding-top:10px"><span>متأخرات من قبل الفترة: <b style="color:#FFA3A3">${money(sum.prior)}</b></span><span>اتقبض: <b style="color:#fff">${money(sum.cash)}</b></span></div>
+    ${sum.cash ? `<div class="row small" style="gap:12px;flex-wrap:wrap;color:var(--on-ink-muted);margin-top:-6px">${Object.entries(E.METHODS).filter(([k]) => sum.byMethod[k]).map(([k, l]) => `<span>${l}: <b style="color:#fff">${money(sum.byMethod[k])}</b></span>`).join('<span>·</span>')}</div>` : ''}
   </header>
   <main class="pad">
     <div class="chips">${[[0, 'الكل'], [1, 'الصف الأول'], [2, 'الصف الثاني'], [3, 'الصف الثالث']].map(([k, l]) => `<button class="fchip ${gf === k ? 'on' : ''}" data-act="duesGrade" data-g="${k}">${l}</button>`).join('')}</div>
@@ -292,9 +293,10 @@ const Print = {
     }).join('');
     const pays = st.payments.filter(p => p.date >= from && p.date <= to).sort((a, b) => a.date.localeCompare(b.date));
     doPrint('تقرير التحصيل · ' + E.monthLabel(m), 'الحسابات حسب بداية دورة كل طالب في الشهر',
-      `<div class="boxes"><div>المستحق<b>${f0(sum.due)} ج</b></div><div>اتحصّل منه<b class="green">${f0(sum.paid)} ج</b></div><div>المتبقي<b class="red">${f0(sum.remaining)} ج</b></div><div>كاش اتقبض في الشهر<b>${f0(sum.cash)} ج</b></div></div>
+      `<div class="boxes"><div>المستحق<b>${f0(sum.due)} ج</b></div><div>اتحصّل منه<b class="green">${f0(sum.paid)} ج</b></div><div>المتبقي<b class="red">${f0(sum.remaining)} ج</b></div><div>اتقبض في الشهر<b>${f0(sum.cash)} ج</b></div></div>
+      <div class="boxes">${Object.entries(E.METHODS).map(([k, l]) => `<div>${l}<b>${f0(sum.byMethod[k])} ج</b></div>`).join('')}<div>خصومات<b>${f0(sum.discount)} ج</b></div></div>
       ${byGrade || '<p>مفيش مستحقات في الشهر ده</p>'}
-      ${pays.length ? `<h2>الدفعات اللي اتسجلت في الشهر</h2><table><thead><tr><th>التاريخ</th><th>الطالب</th><th>النوع</th><th>المبلغ</th></tr></thead><tbody>${pays.map(p => `<tr>${td(E.fmtShort(p.date))}${td(esc((studentById(p.studentId) || {}).name || '—'))}${td(p.kind === 'discount' ? 'خصم' : 'كاش')}${td(f0(p.amount))}</tr>`).join('')}</tbody>
+      ${pays.length ? `<h2>الدفعات اللي اتسجلت في الشهر</h2><table><thead><tr><th>التاريخ</th><th>الطالب</th><th>النوع</th><th>المبلغ</th></tr></thead><tbody>${pays.map(p => `<tr>${td(E.fmtShort(p.date))}${td(esc((studentById(p.studentId) || {}).name || '—'))}${td(E.payLabel(p))}${td(f0(p.amount))}</tr>`).join('')}</tbody>
         <tfoot><tr>${td('')}${td('الإجمالي')}${td('')}${td(f0(pays.reduce((a, p) => a + +p.amount, 0)))}</tr></tfoot></table>` : ''}`);
   },
   late() {
@@ -347,9 +349,9 @@ const Print = {
     const grades = [1, 2, 3].map(gr => { const cs = C.charges.filter(c => c.date >= P.from && c.date <= P.to && E.SUBJ[c.subjectId].grade === gr); return { gr, due: cs.reduce((a, c) => a + c.amount, 0), paid: cs.reduce((a, c) => a + c.paid, 0) }; });
     doPrint('تقرير ' + P.label, E.fmtShort(P.from) + ' ← ' + E.fmtShort(P.to),
       `<div class="boxes"><div>المستحق<b>${f0(T.due)} ج</b></div><div>اتحصّل<b class="green">${f0(T.paid)} ج</b></div><div>المتبقي<b class="red">${f0(T.remaining)} ج</b></div><div>نسبة التحصيل<b>${T.pct}٪</b></div></div>
-      <table><thead><tr><th>الشهر</th><th>المستحق</th><th>اتحصّل منه</th><th>المتبقي</th><th>النسبة</th><th>كاش اتقبض</th><th>خصومات</th></tr></thead><tbody>
-      ${rows.map(r => `<tr>${td(E.monthLabel(r.m))}${td(f0(r.s.due))}${td(f0(r.s.paid), 'green')}${td(f0(r.s.remaining), r.s.remaining ? 'red' : '')}${td(r.s.due ? r.s.pct + '٪' : '–', 'c')}${td(f0(r.s.cash))}${td(f0(r.s.discount))}</tr>`).join('')}</tbody>
-      <tfoot><tr>${td('الإجمالي')}${td(f0(T.due))}${td(f0(T.paid))}${td(f0(T.remaining))}${td(T.pct + '٪', 'c')}${td(f0(T.cash))}${td(f0(T.discount))}</tr></tfoot></table>
+      <table><thead><tr><th>الشهر</th><th>المستحق</th><th>اتحصّل منه</th><th>المتبقي</th><th>النسبة</th><th>نقدي</th><th>إنستاباي</th><th>محفظة</th><th>خصومات</th></tr></thead><tbody>
+      ${rows.map(r => `<tr>${td(E.monthLabel(r.m))}${td(f0(r.s.due))}${td(f0(r.s.paid), 'green')}${td(f0(r.s.remaining), r.s.remaining ? 'red' : '')}${td(r.s.due ? r.s.pct + '٪' : '–', 'c')}${td(f0(r.s.byMethod.cash))}${td(f0(r.s.byMethod.instapay))}${td(f0(r.s.byMethod.wallet))}${td(f0(r.s.discount))}</tr>`).join('')}</tbody>
+      <tfoot><tr>${td('الإجمالي')}${td(f0(T.due))}${td(f0(T.paid))}${td(f0(T.remaining))}${td(T.pct + '٪', 'c')}${td(f0(T.byMethod.cash))}${td(f0(T.byMethod.instapay))}${td(f0(T.byMethod.wallet))}${td(f0(T.discount))}</tr></tfoot></table>
       <h2>حسب الصف</h2><table><thead><tr><th>الصف</th><th>المستحق</th><th>اتحصّل</th><th>المتبقي</th></tr></thead><tbody>${grades.map(g => `<tr>${td(E.GRADES[g.gr])}${td(f0(g.due))}${td(f0(g.paid), 'green')}${td(f0(g.due - g.paid), g.due - g.paid ? 'red' : '')}</tr>`).join('')}</tbody></table>`);
   },
   project(o) {
@@ -369,7 +371,7 @@ const Print = {
       `<div class="boxes"><div>إجمالي المستحق<b>${f0(L.total)} ج</b></div><div>إجمالي المدفوع<b class="green">${f0(L.paid)} ج</b></div><div>${L.due ? 'المطلوب' : L.credit ? 'رصيد له' : 'الحساب'}<b class="${L.due ? 'red' : 'green'}">${L.due ? f0(L.due) + ' ج' : L.credit ? f0(L.credit) + ' ج' : 'خالص'}</b></div></div>
       <h2>المواد</h2><table><thead><tr><th>المادة</th><th>المجموعة</th><th>من</th><th>الحالة</th></tr></thead><tbody>${s.enrollments.map(e => `<tr>${td(esc(E.SUBJ[e.subjectId].name))}${td(esc(E.groupLabel(st, E.groupById(st, E.currentGroupId(e)))))}${td(E.fmtShort(e.startDate))}${td(e.endDate ? 'انسحب ' + E.fmtShort(e.endDate) : 'مشترك')}</tr>`).join('')}</tbody></table>
       <h2>الدورات (كل ٤ حصص)</h2><table><thead><tr><th>بداية الدورة</th><th>المادة</th><th>الدورة</th><th>المبلغ</th><th>المدفوع</th><th>الباقي</th></tr></thead><tbody>${L.charges.map(c => `<tr>${td(E.fmtShort(c.date))}${td(esc(E.SUBJ[c.subjectId].name))}${td(c.partial ? 'ناقصة (' + c.held + ' حصص)' : c.cycle + (c.bundle ? ' · عرض' : ''))}${td(f0(c.amount))}${td(f0(c.paid), 'green')}${td(f0(c.due), c.due ? 'red' : '')}</tr>`).join('')}</tbody></table>
-      <h2>الدفعات</h2><table><thead><tr><th>التاريخ</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead><tbody>${L.payments.map(p => `<tr>${td(E.fmtShort(p.date))}${td(p.kind === 'discount' ? 'خصم' : 'كاش')}${td(esc(p.note || ''))}${td(f0(p.amount))}</tr>`).join('') || '<tr><td colspan="4">مفيش دفعات</td></tr>'}</tbody></table>`);
+      <h2>الدفعات</h2><table><thead><tr><th>التاريخ</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead><tbody>${L.payments.map(p => `<tr>${td(E.fmtShort(p.date))}${td(E.payLabel(p))}${td(esc(p.note || ''))}${td(f0(p.amount))}</tr>`).join('') || '<tr><td colspan="4">مفيش دفعات</td></tr>'}</tbody></table>`);
   },
   students(o) {
     const st = App.st, gr = +o.gr || 0;

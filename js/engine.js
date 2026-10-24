@@ -18,6 +18,9 @@
   // ترتيب الأسبوع المصري: السبت أولًا. القيم = getDay()
   const WEEK = [6, 0, 1, 2, 3, 4, 5];
   const DAY_NAMES = { 6: 'السبت', 0: 'الأحد', 1: 'الاثنين', 2: 'الثلاثاء', 3: 'الأربعاء', 4: 'الخميس', 5: 'الجمعة' };
+  const METHODS = { cash: 'نقدي', instapay: 'إنستاباي', wallet: 'محفظة كاش' };
+  const payMethod = p => p.kind === 'discount' ? 'discount' : (p.method && METHODS[p.method] ? p.method : 'cash');
+  const payLabel = p => p.kind === 'discount' ? 'خصم / إعفاء' : METHODS[payMethod(p)];
   const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
   /* ---------- التواريخ (نصوص YYYY-MM-DD بالتوقيت المحلي) ---------- */
@@ -263,7 +266,9 @@
     const prior = C.charges.filter(c => c.date < from).reduce((t, c) => t + c.due, 0);
     const cash = st.payments.filter(p => p.date >= from && p.date <= to && p.kind !== 'discount').reduce((t, p) => t + (+p.amount || 0), 0);
     const discount = st.payments.filter(p => p.date >= from && p.date <= to && p.kind === 'discount').reduce((t, p) => t + (+p.amount || 0), 0);
-    return { due, paid, remaining: due - paid, prior, cash, discount, pct: due ? Math.round(paid / due * 100) : 100 };
+    const byMethod = { cash: 0, instapay: 0, wallet: 0 };
+    st.payments.forEach(p => { if (p.date >= from && p.date <= to && p.kind !== 'discount') byMethod[payMethod(p)] += (+p.amount || 0); });
+    return { due, paid, remaining: due - paid, prior, cash, discount, byMethod, pct: due ? Math.round(paid / due * 100) : 100 };
   }
 
   /* مستحقات كل مجموعة: مين عليه في الشهر الحالي ومين عليه شهر وبدأ التاني */
@@ -355,7 +360,7 @@
   }
 
   const E = {
-    SUBJECTS, SUBJ, GRADES, WEEK, DAY_NAMES, MONTHS,
+    SUBJECTS, SUBJ, GRADES, WEEK, DAY_NAMES, MONTHS, METHODS, payMethod, payLabel,
     iso, parse, addDays, dow, today, monthKey, monthStart, monthEnd, addMonths, monthName, monthLabel, weekStart, fmtDate, fmtShort, fmtTime,
     defaultState, uid, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,

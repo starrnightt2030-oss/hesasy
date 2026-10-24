@@ -5,6 +5,7 @@ const Views = window.Views = {};
 /* ---------- بطاقة حصة ---------- */
 function sessionState(o) {
   const st = App.st, t = E.today();
+  const empty = o.status === 'normal' && E.studentsInSession(st, o).length === 0;
   if (o.status === 'cancelled') return { chip: 'gray', text: 'اتلغت', off: true };
   if (o.status === 'postponed') {
     const m = st.makeups.find(x => x.id === o.makeupId);
@@ -14,8 +15,10 @@ function sessionState(o) {
   const recorded = att && Object.keys(att).length > 0;
   const mins = minutesUntil(o.date, o.time);
   if (o.date < t || (o.date === t && mins <= 0)) {
+    if (empty) return { chip: 'gray', text: 'مفيش طلاب', empty: true };
     return recorded ? { chip: 'green', text: 'اتسجل الغياب', done: true } : { chip: 'amber', text: o.date === t ? 'سجّل الغياب' : 'الغياب متسجلش', need: true };
   }
+  if (empty) return { chip: 'gray', text: 'مفيش طلاب لسه', empty: true };
   if (o.date === t) return { chip: mins <= 60 ? 'amber' : 'blue', text: mins < 60 ? 'بعد ' + mins + ' دقيقة' : 'بعد ' + Math.floor(mins / 60) + ' س ' + (mins % 60 ? (mins % 60) + ' د' : ''), soon: mins <= 60 };
   return { chip: 'blue', text: E.fmtShort(o.date) };
 }
@@ -27,7 +30,7 @@ function sessionCard(o, opt = {}) {
   const n = E.studentsInSession(st, o).length;
   const s = sessionState(o);
   const [tm, ap] = E.fmtTime(o.time).split(' ');
-  const btn = s.off ? 'تفاصيل' : s.need || s.soon ? 'افتح الغياب' : s.done ? 'عرض' : 'فتح';
+  const btn = s.empty ? 'فتح' : s.off ? 'تفاصيل' : s.need || s.soon ? 'افتح الغياب' : s.done ? 'عرض' : 'فتح';
   const primary = !s.off && (s.need || s.soon);
   return `<a class="session tap ${o.type === 'makeup' ? 'makeup' : ''} ${s.off ? 'off' : ''}" href="#/session/${encodeURIComponent(o.key)}">
     <div class="timebox g${sub.grade}"><span class="t">${tm}</span><span class="p">${ap === 'م' ? 'مساءً' : 'صباحًا'}</span></div>
@@ -43,7 +46,7 @@ Views.home = () => {
   const st = App.st, C = App.C, t = E.today();
   const sum = E.periodSummary(st, C, E.monthStart(t), E.monthEnd(t));
   const today = E.sessionsOnDay(st, t);
-  const active = today.filter(o => o.status === 'normal');
+  const active = today.filter(o => o.status === 'normal' && E.studentsInSession(st, o).length);
   const ledgers = [...C.ledgers.values()];
   const late = ledgers.filter(L => L.late > 0);
   const owing = ledgers.filter(L => L.due > 0);

@@ -188,7 +188,7 @@ function checkReminders() {
   const before = App.st.settings.reminders.before;
   const r = reminded();
   for (const o of E.sessionsOnDay(App.st, E.today())) {
-    if (o.status !== 'normal' || r.k.includes(o.key)) continue;
+    if (o.status !== 'normal' || r.k.includes(o.key) || !E.studentsInSession(App.st, o).length) continue;
     const m = minutesUntil(o.date, o.time);
     if (m <= before && m > -3) {
       r.k.push(o.key);
@@ -238,12 +238,43 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => Store.flush());
 
+/* ---------- التحديثات ----------
+ * أول ما تفتح التطبيق بيدوّر على نسخة جديدة على GitHub. لو لقى، بيظهرلك إشعار "حدّث دلوقتي". */
+let updateShown = false, reloading = false, wantReload = false;
+function showUpdate(worker) {
+  if (updateShown) return;
+  updateShown = true;
+  Sound.play('chime');
+  const s = sheet(`<div class="alarm-ic amber" style="animation:wobble 1.2s ease-in-out 2">${ic('refresh', 40)}</div>
+    <h2 style="text-align:center">فيه تحديث جديد للتطبيق</h2>
+    <div class="banner green">${ic('check', 18)}<span>بياناتك كلها محفوظة ومش هتتأثر بالتحديث. التطبيق هيقفل ويفتح تاني في ثانية.</span></div>
+    <div class="grid2"><button class="btn ghost" data-close>بعدين</button><button class="btn accent" id="upd-ok">${ic('refresh', 18)} حدّث دلوقتي</button></div>`, { center: true, onClose: () => { setTimeout(() => { updateShown = false; }, 30 * 60000); } });
+  $('#upd-ok', s.el).onclick = async () => {
+    $('#upd-ok', s.el).disabled = true; $('#upd-ok', s.el).textContent = 'بيحدّث…';
+    try { await Store.flush(); } catch (e) {}
+    wantReload = true;
+    worker.postMessage('skip-waiting');
+    setTimeout(() => location.reload(), 2500);
+  };
+}
+function setupUpdates() {
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.url) location.hash = e.data.url.split('#')[1] || ''; });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading || !wantReload) return; reloading = true; location.reload(); });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    const watch = w => { if (!w) return; w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); }); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    watch(reg.installing);
+    reg.addEventListener('updatefound', () => watch(reg.installing));
+    const check = () => reg.update().catch(() => {});
+    check();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    setInterval(check, 30 * 60000);
+  }).catch(() => {});
+}
+
 /* ---------- التشغيل ---------- */
 (async function boot() {
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-    navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.url) location.hash = e.data.url.split('#')[1] || ''; });
-  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') setupUpdates();
   Store.persist();
   let saved = null;
   try { saved = await Store.load(); } catch (e) {}

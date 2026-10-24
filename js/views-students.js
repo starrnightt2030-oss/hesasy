@@ -125,7 +125,7 @@ Views.student = id => {
     <section style="display:flex;flex-direction:column;gap:10px">
       <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} كشف حساب</button></div>
       <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.charges.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
-        <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة'}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
+        <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة · ' + E.payLabel(x.p)}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
           <span class="num b" style="color:var(--green)">+${money(x.p.amount)}</span><button class="icon-btn light" style="width:36px;height:36px" data-act="delPay" data-p="${x.p.id}" aria-label="حذف الدفعة">${ic('x', 16)}</button></div>` : `
         <div class="list-row"><span class="avatar ${x.c.due > 0 ? (x.c.latest ? 'amber' : 'red') : ''}" style="width:34px;height:34px">${ic('cal', 16)}</span><span class="grow stack"><span class="sm b">${esc(E.SUBJ[x.c.subjectId].short)} · ${x.c.partial ? 'دورة ناقصة (' + x.c.held + ' حصص)' : 'دورة ' + x.c.cycle}${x.c.bundle ? ' · عرض' : ''}</span><span class="small muted">${E.fmtDate(x.c.date)}${x.c.due > 0 ? ' · باقي ' + money(x.c.due) : ' · مدفوعة'}</span></span>
           <span class="num b">${money(x.c.amount)}</span></div>`).join('') || '<div class="sm muted" style="padding:14px 0">لسه مفيش حاجة</div>'}</div>
@@ -148,21 +148,25 @@ ACT.pay = el => {
   const sh = sheet(`<h2>تسجيل دفعة · ${esc(s.name)}</h2>
     ${L.due > 0 ? `<div class="banner amber">${ic('wallet', 18)}<span>المطلوب منه: <b>${shown() ? fmt(L.due) + ' ج' : 'مخفي'}</b>${L.late > 0 ? ` (منهم ${shown() ? fmt(L.late) : '••'} متأخر)` : ''}. الدفعة بتتخصم من الأقدم للأحدث.</span></div>` : `<div class="banner green">${ic('check', 18)}<span>مفيش عليه حاجة دلوقتي — الدفعة هتتسجل رصيد مقدم.</span></div>`}
     <div class="seg" id="pk"><button class="on" data-k="cash">دفعة فلوس</button><button data-k="discount">خصم / إعفاء</button></div>
+    <div class="field" id="pm-w">طريقة الدفع<div class="grid3" id="pm">${Object.entries(E.METHODS).map(([k, l]) => `<button type="button" class="btn ${k === (localStorage.getItem('hesasy-method') || 'cash') ? '' : 'ghost'}" data-m="${k}" aria-pressed="${k === (localStorage.getItem('hesasy-method') || 'cash')}" style="min-height:52px;flex-direction:column;gap:2px;font-size:13px;padding:0 4px">${ic(k === 'cash' ? 'wallet' : k === 'instapay' ? 'bolt' : 'phone', 18)}${l}</button>`).join('')}</div></div>
     <label class="field">المبلغ<input class="input num" type="number" inputmode="numeric" id="pa" value="${shown() && L.due > 0 ? L.due : ''}" placeholder="0" style="font-size:22px;font-weight:700" autofocus></label>
     ${L.due > 0 && shown() ? `<div class="chips">${[...new Set([L.due, L.late, L.current, 250, 175].filter(v => v > 0 && v <= L.due))].map(v => `<button class="fchip" data-v="${v}">${fmt(v)}</button>`).join('')}</div>` : ''}
     <div class="grid2"><label class="field">التاريخ<input class="input" type="date" id="pd" value="${E.today()}"></label><label class="field">ملاحظة<input class="input" id="pn" placeholder="اختياري"></label></div>
     <button class="btn lg" id="pok">${ic('check', 20, 2.4)} حفظ الدفعة</button>`);
-  let kind = 'cash';
-  $('#pk', sh.el).onclick = e => { const b = e.target.closest('button'); if (!b) return; kind = b.dataset.k; $$('#pk button', sh.el).forEach(x => x.classList.toggle('on', x === b)); };
+  let kind = 'cash', method = localStorage.getItem('hesasy-method') || 'cash';
+  $('#pk', sh.el).onclick = e => { const b = e.target.closest('button'); if (!b) return; kind = b.dataset.k; $$('#pk button', sh.el).forEach(x => x.classList.toggle('on', x === b)); $('#pm-w', sh.el).hidden = kind === 'discount'; };
+  $('#pm', sh.el).onclick = e => { const b = e.target.closest('button'); if (!b) return; method = b.dataset.m; Sound.play('tap'); $$('#pm button', sh.el).forEach(x => { const on = x === b; x.classList.toggle('ghost', !on); x.setAttribute('aria-pressed', on); }); };
   sh.el.addEventListener('click', e => { const c = e.target.closest('.fchip[data-v]'); if (c) $('#pa', sh.el).value = c.dataset.v; });
   $('#pok', sh.el).onclick = () => {
     const amount = Math.round(+$('#pa', sh.el).value);
     if (!(amount > 0)) return toast('اكتب المبلغ', { type: 'err', sound: 'err' });
     const date = $('#pd', sh.el).value || E.today(), note = $('#pn', sh.el).value.trim();
     sh.close();
-    commit(st => st.payments.push({ id: E.uid(st), studentId: s.id, amount, date, kind, note }), (kind === 'discount' ? 'اتسجل خصم ' : 'اتسجلت دفعة ') + fmt(amount) + ' ج');
+    if (kind !== 'discount') localStorage.setItem('hesasy-method', method);
+    const p = { id: E.uid(App.st), studentId: s.id, amount, date, kind, note }; if (kind !== 'discount') p.method = method;
+    commit(st => st.payments.push(p), (kind === 'discount' ? 'اتسجل خصم ' : 'اتسجلت دفعة ') + fmt(amount) + ' ج' + (kind !== 'discount' ? ' · ' + E.METHODS[method] : ''));
     const L2 = App.C.ledgers.get(s.id);
-    if (s.phone && kind === 'cash') setTimeout(() => toast('ابعت إيصال لولي الأمر؟', { type: 'warn', icon: 'chat', action: 'واتساب', ms: 6000, onAction: () => window.open(waLink(s.phone, `إيصال استلام 🧾\nالطالب: ${s.name}\nالمبلغ: ${fmt(amount)} جنيه\nالتاريخ: ${E.fmtDate(date)}\n${L2.due > 0 ? 'المتبقي: ' + fmt(L2.due) + ' جنيه' : 'الحساب خالص ✅'}\n${App.st.settings.appName}`), '_blank') }), 400);
+    if (s.phone && kind === 'cash') setTimeout(() => toast('ابعت إيصال لولي الأمر؟', { type: 'warn', icon: 'chat', action: 'واتساب', ms: 6000, onAction: () => window.open(waLink(s.phone, `إيصال استلام 🧾\nالطالب: ${s.name}\nالمبلغ: ${fmt(amount)} جنيه\nطريقة الدفع: ${E.METHODS[method]}\nالتاريخ: ${E.fmtDate(date)}\n${L2.due > 0 ? 'المتبقي: ' + fmt(L2.due) + ' جنيه' : 'الحساب خالص ✅'}\n${App.st.settings.appName}`), '_blank') }), 400);
   };
 };
 ACT.delPay = async el => {

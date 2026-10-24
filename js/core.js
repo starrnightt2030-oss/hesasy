@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.0.0'
+  version: '1.1.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
