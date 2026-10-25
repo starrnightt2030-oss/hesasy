@@ -129,7 +129,21 @@ function showOnboarding() {
 
 /* ---------- شاشة القفل ---------- */
 let attempts = 0, lockUntil = 0;
+/* الجلسة: محفوظة في sessionStorage — بتفضل مع تحديث الصفحة، وبتتمسح لما التطبيق يتقفل خالص */
+const SS = 'hesasy-session';
+const sessGet = () => { try { return JSON.parse(sessionStorage.getItem(SS) || 'null'); } catch (e) { return null; } };
+const sessSet = o => { try { sessionStorage.setItem(SS, JSON.stringify(Object.assign(sessGet() || {}, o))); } catch (e) {} };
+const sessClear = () => { try { sessionStorage.removeItem(SS); } catch (e) {} };
+function sessionStillValid() {
+  const s = sessGet();
+  if (!s || !s.on) return false;
+  const now = Date.now();
+  if (s.active && now - s.active > IDLE_LOCK_MS) return false;
+  if (s.hidden && now - s.hidden > BG_LOCK_MS) return false;
+  return true;
+}
 function lockApp() {
+  sessClear();
   App.unlocked = false; App.revealed = false;
   $$('.overlay').forEach(o => o.remove());
   showLock();
@@ -156,11 +170,12 @@ async function showLock() {
   if (sec.bio) setTimeout(bio, 350);
 }
 let started = false;
-function unlock() {
+function unlock(silent) {
   $('#lock-root').innerHTML = '';
   lastActive = Date.now(); App.hiddenAt = 0;
+  sessSet({ on: true, active: Date.now(), hidden: 0 });
   App.unlocked = true;
-  Sound.play('ok');
+  if (!silent) Sound.play('ok');
   render();
   setTimeout(dailyChecks, 500);
   if (!started) { started = true; setTimeout(dailyBackup, 1500); setInterval(checkReminders, 20000); }
@@ -240,9 +255,12 @@ async function dailyBackup() {
 /* ---------- القفل التلقائي ----------
  * التنقل جوه التطبيق عمره ما بيقفله. القفل بس لما:
  * التطبيق يتقفل خالص، أو يفضل في الخلفية أكتر من ٣٠ ثانية، أو ٣ دقايق من غير استخدام. */
-const BG_LOCK_MS = 30000, IDLE_LOCK_MS = 180000;
-let lastActive = Date.now();
-['pointerdown', 'keydown', 'scroll', 'touchstart', 'input'].forEach(ev => document.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
+const BG_LOCK_MS = 30000, IDLE_LOCK_MS = 5 * 60000;
+let lastActive = Date.now(), lastSaved = 0;
+['pointerdown', 'keydown', 'scroll', 'touchstart', 'input'].forEach(ev => document.addEventListener(ev, () => {
+  lastActive = Date.now();
+  if (App.unlocked && lastActive - lastSaved > 5000) { lastSaved = lastActive; sessSet({ active: lastActive }); }
+}, { passive: true, capture: true }));
 setInterval(() => {
   if (App.unlocked && !App.picking && App.sec && App.sec.lock && App.sec.pin && !document.hidden && Date.now() - lastActive > IDLE_LOCK_MS) lockApp();
 }, 10000);
@@ -250,11 +268,13 @@ document.addEventListener('visibilitychange', () => {
   if (!App.st) return;
   if (document.hidden) {
     App.hiddenAt = Date.now();
+    if (App.unlocked) sessSet({ hidden: App.hiddenAt, active: lastActive });
     Store.flush();
     if (App.revealed && !App.picking) { App.revealed = false; if (App.unlocked && !$('.overlay')) render(); }
   } else {
     const away = App.hiddenAt ? Date.now() - App.hiddenAt : 0;
     App.hiddenAt = 0; lastActive = Date.now();
+    if (App.unlocked && !(App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS)) sessSet({ hidden: 0, active: lastActive });
     if (App.picking) return;
     if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS) lockApp();
     else if (App.unlocked && !$('.overlay')) { recompute(); render(); checkReminders(); }
@@ -310,8 +330,8 @@ function setupUpdates() {
   applyIdentity();
   $('#splash') && $('#splash').remove();
   if (!App.sec.pin) showOnboarding();
-  else if (App.sec.lock) showLock();
-  else unlock();
+  else if (App.sec.lock && !sessionStillValid()) showLock();
+  else unlock(true);
   // تحديث العدادات كل دقيقة (حالة الحصص "بعد X دقيقة")
   setInterval(() => { if (App.unlocked && !document.hidden && !$('.overlay') && !document.activeElement.matches('input,select,textarea')) { const r = route().name; if (r === 'home' || r === 'schedule') render(); } }, 60000);
   // يوم جديد: إعادة الحساب

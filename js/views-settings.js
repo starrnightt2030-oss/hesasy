@@ -53,7 +53,7 @@ Views.settings = () => {
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">الحماية والخصوصية</h2>
       <div class="card tight">
         ${sw('tHide', S.privacy.hide, 'إخفاء الأرصدة', 'الفلوس بتظهر •••• ولازم الباسورد أو البصمة علشان تظهر')}
-        ${sw('tLock', sec.lock, 'قفل التطبيق عند الفتح', 'بالباسورد أو البصمة')}
+        ${sw('tLock', sec.lock, 'قفل التطبيق', 'بيطلب الباسورد أو البصمة لما تقفل التطبيق، أو يفضل في الخلفية، أو ٥ دقايق من غير استخدام')}
         ${App.ui.bioAvail ? sw('tBio', !!sec.bio, 'الفتح بالبصمة', 'بصمة أو قفل شاشة الموبايل') : `<div class="set-row"><span class="stack"><span class="b">الفتح بالبصمة</span><span class="small muted">الجهاز أو المتصفح مش بيدعم البصمة هنا</span></span></div>`}
         <div class="set-row"><span class="b">تغيير باسورد التطبيق</span><button class="btn sm ghost" data-act="changePin">${ic('key', 16)} تغيير</button></div>
         <div class="set-row"><span class="stack"><span class="b">تغيير باسورد الأدمن</span><span class="small muted">للتصفير واسترجاع النسخ والحذف النهائي</span></span><button class="btn sm ghost" data-act="changeAdmin">${ic('shield', 16)} تغيير</button></div>
