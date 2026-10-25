@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.2.0'
+  version: '1.3.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -229,6 +229,24 @@ async function needReveal() {
   if (shown()) return true;
   if (await askPin('تأكيد الهوية', 'لازم تأكيد قبل عرض أو طباعة الحسابات')) { App.revealed = true; render(); return true; }
   return false;
+}
+
+/* ---------- اختيار ملف ----------
+ * الـ input ثابت في الصفحة ومش بيتمسح لما الشاشة تتعاد، علشان اختيار الملف ميضيعش
+ * لما الموبايل يخرج من التطبيق ويرجع. ومن غير قفل أو إعادة رسم وإنت بتختار. */
+function pickFile(accept) {
+  return new Promise(res => {
+    let inp = $('#file-picker');
+    if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.id = 'file-picker'; inp.hidden = true; document.body.appendChild(inp); }
+    if (accept) inp.setAttribute('accept', accept); else inp.removeAttribute('accept');
+    inp.value = '';
+    App.picking = true;
+    const done = f => { App.picking = false; inp.onchange = null; window.removeEventListener('focus', onFocus); res(f); };
+    const onFocus = () => setTimeout(() => { if (App.picking && !(inp.files && inp.files.length)) done(null); }, 1500);
+    inp.onchange = () => done(inp.files && inp.files[0] ? inp.files[0] : null);
+    window.addEventListener('focus', onFocus);
+    inp.click();
+  });
 }
 
 /* ---------- حفظ التعديلات ---------- */

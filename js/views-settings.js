@@ -15,7 +15,7 @@ Views.settings = () => {
         <div class="row" style="gap:14px">${brandIcon(64)}
           <label class="field grow">اسم التطبيق<input class="input" id="set-name" value="${esc(S.appName)}" maxlength="24" data-change="setName"></label></div>
         <div class="field">الأيقونة<div class="icon-grid">${APP_ICONS.map(n => `<button data-act="setIcon" data-n="${n}" class="${!S.iconData && S.iconId === n ? 'on' : ''}" aria-label="أيقونة ${n}">${ic(n, 22)}</button>`).join('')}</div>
-          <label class="btn ghost sm" style="border-style:dashed;cursor:pointer">${ic('image', 18)} صورة من الموبايل<input type="file" accept="image/*" data-change="setIconImg" hidden></label></div>
+          <button class="btn ghost sm" style="border-style:dashed" data-act="setIconImg">${ic('image', 18)} صورة من الموبايل</button></div>
         <div class="row between"><span class="b">اللون الأساسي</span><div class="swatches">${ACCENTS.map(c => `<button data-act="setAccent" data-c="${c}" class="${S.accent === c ? 'on' : ''}" style="background:${c}" aria-label="لون ${c}"></button>`).join('')}</div></div>
         <div class="banner blue">${ic('info', 18)}<span>الاسم والأيقونة بيتغيروا جوه التطبيق على طول. علشان يتغيروا على الشاشة الرئيسية للموبايل، امسح الاختصار القديم وثبّت التطبيق تاني.</span></div>
       </div></section>
@@ -70,6 +70,7 @@ Views.settings = () => {
           `<div class="banner amber">${ic('info', 18)}<span>المتصفح ده مش بيسمح للتطبيق يكتب في فولدر لوحده. علشان كده كل يوم هيظهرلك زرار <b>"حفظ نسخة اليوم"</b> بضغطة واحدة بتنزل الملف في Downloads.</span></div>`}
         <div class="grid2"><button class="btn sm ghost" data-act="dlBackup">${ic('download', 16)} تنزيل نسخة</button><button class="btn sm ghost" data-act="shareBackup">${ic('share', 16)} مشاركة (درايف/واتساب)</button></div>
         <a class="btn sm soft" href="#/backups">${ic('layers', 16)} النسخ المحفوظة واسترجاعها</a>
+        <div class="banner red">${ic('alert', 18)}<span><b>مهم:</b> "مسح بيانات المتصفح" أو مسح بيانات Chrome بيمسح كل حاجة جوه التطبيق، ومعاها النسخ الداخلية. النسخة الوحيدة اللي بتفضل هي الملف اللي نزّلته على الموبايل — احتفظ بيه، ويفضّل تبعته لنفسك على واتساب أو Drive.</span></div>
       </div></section>
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm" style="color:var(--red)">منطقة الخطر</h2>
@@ -90,8 +91,8 @@ Views.settings_after = async () => {
 ACT.setName = el => { const v = el.value.trim(); if (!v) return; commit(st => { st.settings.appName = v; }, 'الاسم اتغير'); applyIdentity(); };
 ACT.setIcon = el => { commit(st => { st.settings.iconId = el.dataset.n; st.settings.iconData = null; }, null); applyIdentity(); };
 ACT.setAccent = el => { commit(st => { st.settings.accent = el.dataset.c; }, null); applyIdentity(); };
-ACT.setIconImg = el => {
-  const f = el.files[0]; if (!f) return;
+ACT.setIconImg = async () => {
+  const f = await pickFile('image/*'); if (!f) return;
   const img = new Image();
   img.onload = () => {
     const c = document.createElement('canvas'); c.width = c.height = 512;
@@ -170,10 +171,10 @@ ACT.shareBackup = async () => { try { if (!(await Backup.share(App.st))) { Backu
 Views.backups = () => `
   <header class="plain-head">${backBtn('#/settings')}<h1>النسخ الاحتياطية</h1></header>
   <main class="pad">
-    <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي جوه التطبيق (آخر ${Backup.KEEP}). الاسترجاع بيرجّع كل البيانات زي ما كانت وقت النسخة، ومحتاج باسورد الأدمن.</span></div>
+    <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي جوه التطبيق (آخر ${Backup.KEEP}). قبل الاسترجاع هتشوف عدد الطلاب والدفعات اللي في النسخة، والاسترجاع محتاج باسورد الأدمن.</span></div>
     <div id="bk-list" class="card tight"><div class="sm muted" style="padding:14px 0">بيحمّل…</div></div>
     <button class="btn" data-act="backupNow">${ic('refresh', 18)} اعمل نسخة دلوقتي</button>
-    <label class="btn ghost" style="cursor:pointer">${ic('upload', 18)} استرجاع من ملف<input type="file" accept=".json,application/json" data-change="restoreFile" hidden></label>
+    <button class="btn accent lg" data-act="restoreFile">${ic('upload', 20)} استرجاع من ملف على الموبايل</button>
   </main>`;
 Views.backups_after = async () => {
   const list = await Backup.list();
@@ -181,19 +182,58 @@ Views.backups_after = async () => {
   el.innerHTML = list.length ? list.map(b => `<div class="list-row"><span class="avatar">${ic('layers', 18)}</span><span class="grow stack"><span class="b">${E.fmtDate(b.at.slice(0, 10))} · ${new Date(b.at).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}</span><span class="small muted">${esc(b.reason)} · ${b.students} طالب</span></span><button class="btn sm ghost" data-act="restoreInternal" data-id="${b.id}">استرجاع</button></div>`).join('') : '<div class="sm muted" style="padding:14px 0">مفيش نسخ لسه</div>';
 };
 ACT.backupNow = async () => { await Backup.add(App.st, 'يدوي'); toast('اتعملت نسخة'); render(); };
-async function restoreData(data, label) {
-  if (!(await askAdmin('استرجاع ' + label, { text: 'كل البيانات الحالية هتتبدل بالنسخة دي. هنعمل نسخة من الحالي قبلها احتياطي.', ok: 'استرجاع' }))) return;
-  await Backup.add(App.st, 'قبل الاسترجاع');
-  App.st = migrate(data);
-  recompute(); Store.save(App.st); await Store.flush();
-  applyIdentity(); go('home'); render();
-  toast('البيانات رجعت', { sound: 'ok' });
+/* ملخص محتوى النسخة قبل الاسترجاع */
+function backupSummary(data) {
+  const pays = (data.payments || []).filter(p => p.kind !== 'discount');
+  return { students: (data.students || []).length, groups: (data.groups || []).length, payments: pays.length, paid: pays.reduce((a, p) => a + (+p.amount || 0), 0), att: Object.keys(data.attendance || {}).length, items: (data.projectItems || []).length };
 }
-ACT.restoreInternal = async el => { const b = await Backup.get(+el.dataset.id); if (b) restoreData(b.data, 'نسخة ' + E.fmtShort(b.at.slice(0, 10))); };
-ACT.restoreFile = async el => {
-  const f = el.files[0]; el.value = ''; if (!f) return;
-  try { const j = await Backup.readFile(f); restoreData(j.data, 'ملف ' + f.name); }
-  catch (e) { toast(e.message || 'الملف مش سليم', { type: 'err', sound: 'err' }); }
+function confirmRestore(data, at, label, needAdmin) {
+  const b = backupSummary(data);
+  const empty = !b.students && !b.groups;
+  return new Promise(res => {
+    let done = false;
+    const s = sheet(`<h2>${esc(label)}</h2>
+      ${at ? `<div class="sm muted">النسخة اتعملت: <b>${E.fmtDate(at.slice(0, 10))} · ${new Date(at).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}</b></div>` : ''}
+      <div class="grid2">
+        <div class="stat green"><span class="k">طلاب</span><span class="v">${b.students}</span></div>
+        <div class="stat green"><span class="k">مجموعات</span><span class="v">${b.groups}</span></div>
+        <div class="stat amber"><span class="k">دفعات</span><span class="v">${b.payments}</span></div>
+        <div class="stat amber"><span class="k">إجمالي المدفوع</span><span class="v">${fmt(b.paid)} ج</span></div>
+      </div>
+      <div class="small muted">حصص متسجل غيابها: ${b.att} · بنود مشروع: ${b.items}</div>
+      ${empty ? `<div class="banner red">${ic('alert', 18)}<span><b>النسخة دي فاضية</b> — مفيهاش طلاب ولا مجموعات. غالبًا اتعملت قبل ما تدخل البيانات. دوّر على ملف تاني أحدث.</span></div>` :
+        `<div class="banner amber">${ic('info', 18)}<span>البيانات اللي في التطبيق دلوقتي هتتبدل بالنسخة دي${needAdmin ? '، وهنعمل نسخة من الحالي قبلها احتياطي' : ''}.</span></div>`}
+      ${needAdmin ? `<label class="field">باسورد الأدمن<input class="input" type="password" id="rs-pw" autocomplete="off"></label><div id="rs-e" style="color:var(--red);font-weight:600;min-height:20px;font-size:14px"></div>` : ''}
+      <div class="grid2"><button class="btn ghost" data-close>رجوع</button><button class="btn ${empty ? 'danger' : 'accent'}" id="rs-ok">${empty ? 'استرجعها برضو' : 'استرجاع'}</button></div>`,
+      { center: true, onClose: () => { if (!done) res(false); } });
+    $('#rs-ok', s.el).onclick = async () => {
+      if (needAdmin && !(await Security.checkAdmin($('#rs-pw', s.el).value))) { $('#rs-e', s.el).textContent = 'باسورد الأدمن غلط'; Sound.play('err'); return; }
+      done = true; s.close(); res(true);
+    };
+  });
+}
+async function applyRestore(data) {
+  App.st = migrate(JSON.parse(JSON.stringify(data)));
+  App.ui = {};
+  recompute(); Store.save(App.st); await Store.flush();
+  try { await Backup.add(App.st, 'بعد الاسترجاع'); App.st.settings.backup.lastAuto = E.today(); Store.save(App.st); } catch (e) {}
+  applyIdentity();
+}
+window.confirmRestore = confirmRestore; window.applyRestore = applyRestore;
+async function restoreData(data, at, label) {
+  if (!(await confirmRestore(data, at, label, true))) return;
+  await Backup.add(App.st, 'قبل الاسترجاع');
+  await applyRestore(data);
+  go('home'); render();
+  const b = backupSummary(data);
+  toast(`البيانات رجعت: ${b.students} طالب و${b.payments} دفعة`, { sound: 'ok', ms: 4500 });
+}
+ACT.restoreInternal = async el => { const b = await Backup.get(+el.dataset.id); if (b) restoreData(b.data, b.at, 'استرجاع نسخة داخلية'); };
+ACT.restoreFile = async () => {
+  const f = await pickFile();
+  if (!f) return;
+  try { const j = await Backup.readFile(f); restoreData(j.data, j.at, 'استرجاع: ' + f.name); }
+  catch (e) { toast(e.message || 'الملف مش سليم', { type: 'err', sound: 'err', ms: 5000 }); }
 };
 
 /* ---------- التصفير ---------- */

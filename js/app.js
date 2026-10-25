@@ -84,7 +84,19 @@ function showOnboarding() {
     </div>
     <div class="banner amber" style="max-width:360px">${ic('info', 18)}<span>هنعمل دلوقتي <b>باسورد للتطبيق</b> (أرقام لفتح التطبيق وعرض الأرصدة) و<b>باسورد أدمن</b> (للتصفير والاسترجاع). احفظهم كويس.</span></div>
     <button class="btn accent lg" id="ob-go" style="width:100%;max-width:360px">ابدأ الإعداد</button>
+    <button class="btn lg" id="ob-restore" style="width:100%;max-width:360px;background:rgba(255,255,255,.1)">${ic('upload', 20)} عندي نسخة احتياطية — استرجعها</button>
   </div>`;
+  $('#ob-restore').onclick = async () => {
+    const f = await pickFile();
+    if (!f) return;
+    let j;
+    try { j = await Backup.readFile(f); } catch (e) { return toast(e.message || 'الملف مش سليم', { type: 'err', sound: 'err', ms: 5000 }); }
+    if (!(await confirmRestore(j.data, j.at, 'استرجاع: ' + f.name, false))) return;
+    await applyRestore(j.data);
+    const n = (j.data.students || []).length;
+    toast(`البيانات رجعت: ${n} طالب — اعمل الباسوردات علشان تكمل`, { sound: 'ok', ms: 5000 });
+    showOnboarding();
+  };
   $('#ob-go').onclick = async () => {
     const pin = await newPinFlow('اختار باسورد التطبيق');
     if (!pin) return;
@@ -232,19 +244,20 @@ const BG_LOCK_MS = 30000, IDLE_LOCK_MS = 180000;
 let lastActive = Date.now();
 ['pointerdown', 'keydown', 'scroll', 'touchstart', 'input'].forEach(ev => document.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
 setInterval(() => {
-  if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && !document.hidden && Date.now() - lastActive > IDLE_LOCK_MS) lockApp();
+  if (App.unlocked && !App.picking && App.sec && App.sec.lock && App.sec.pin && !document.hidden && Date.now() - lastActive > IDLE_LOCK_MS) lockApp();
 }, 10000);
 document.addEventListener('visibilitychange', () => {
   if (!App.st) return;
   if (document.hidden) {
     App.hiddenAt = Date.now();
     Store.flush();
-    if (App.revealed) { App.revealed = false; if (App.unlocked) render(); }
+    if (App.revealed && !App.picking) { App.revealed = false; if (App.unlocked && !$('.overlay')) render(); }
   } else {
     const away = App.hiddenAt ? Date.now() - App.hiddenAt : 0;
     App.hiddenAt = 0; lastActive = Date.now();
+    if (App.picking) return;
     if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS) lockApp();
-    else if (App.unlocked) { recompute(); render(); checkReminders(); }
+    else if (App.unlocked && !$('.overlay')) { recompute(); render(); checkReminders(); }
   }
 });
 window.addEventListener('pagehide', () => Store.flush());

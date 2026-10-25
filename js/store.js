@@ -173,8 +173,10 @@
       return false;
     },
     async readFile(file) {
-      const txt = await file.text();
-      const j = JSON.parse(txt);
+      const txt = (await file.text()).replace(/^\uFEFF/, '').trim();
+      let j;
+      try { j = JSON.parse(txt); } catch (e) { throw new Error('الملف ده مش نسخة احتياطية من التطبيق (لازم يكون ملف hesasy-backup….json)'); }
+      if (j && !j.app && Array.isArray(j.students)) j = { app: 'hesasy', v: 1, at: null, data: j };
       if (!j || j.app !== 'hesasy' || !j.data || !Array.isArray(j.data.students)) throw new Error('الملف ده مش نسخة احتياطية من التطبيق');
       return j;
     }
