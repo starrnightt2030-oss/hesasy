@@ -44,6 +44,7 @@ Views.dues = () => {
     ${sum.cash ? `<div class="row small" style="gap:12px;flex-wrap:wrap;color:var(--on-ink-muted);margin-top:-6px">${Object.entries(E.METHODS).filter(([k]) => sum.byMethod[k]).map(([k, l]) => `<span>${l}: <b style="color:#fff">${money(sum.byMethod[k])}</b></span>`).join('<span>·</span>')}</div>` : ''}
   </header>
   <main class="pad">
+    ${dueAlertsHTML()}
     <div class="chips">${[[0, 'الكل'], [1, 'الصف الأول'], [2, 'الصف الثاني'], [3, 'الصف الثالث']].map(([k, l]) => `<button class="fchip ${gf === k ? 'on' : ''}" data-act="duesGrade" data-g="${k}">${l}</button>`).join('')}</div>
     ${cards.length ? cards.map(({ g, d }) => {
       const sub = E.SUBJ[g.subjectId];
@@ -189,12 +190,14 @@ Views.reports = () => {
   const RS = [
     ['group', 'كشف حساب مجموعة', 'كل طالب: المستحق والمدفوع والمتبقي', 'users', 'blue'],
     ['collection', 'التحصيل الشهري', 'إجمالي كل مجموعة وكل صف في الشهر', 'wallet', 'green'],
-    ['late', 'المتأخرات', 'كل اللي عليهم فلوس مرتبين بالأكبر', 'alert', 'red'],
+    ['late', 'كشف المستحقات', 'كل اللي عليهم فلوس: متأخرين، خلصوا الشهر، الحصة التالتة', 'alert', 'red'],
     ['attendance', 'كشف الغياب', 'حضور وغياب كل حصة للمجموعة في الشهر', 'check', 'amber'],
     ['schedule', 'الجدول الأسبوعي', 'جدول الحصص جاهز للطباعة والتعليق', 'cal', 'blue'],
     ['term', 'تقرير الترم / السنة', 'المستحق والمحصل شهر بشهر', 'chart', 'green'],
     ['project', 'مستلزمات المشروع', 'كل بند: مين دفع ومين لأ', 'box', 'green'],
-    ['student', 'كشف حساب طالب', 'كشف أو إيصال لولي الأمر', 'user', 'gray'],
+    ['student', 'تقرير طالب كامل', 'المدفوع والمستحق والمتبقي والحضور والغياب', 'user', 'gray'],
+    ['projAtt', 'المشروع: الغياب والخصومات', 'خصم كل شهر لكل طالب والإجمالي', 'box', 'green'],
+    ['projQ', 'المشروع: تقييم الأسئلة', 'درجات كل سؤال بعد خصم التأخير', 'pen', 'green'],
     ['students', 'قائمة الطلاب', 'كل الطلاب بمواد كل واحد وموبايله', 'layers', 'gray']
   ];
   return `
@@ -222,7 +225,7 @@ ACT.repMode = el => { App.ui.repMode = el.dataset.m; render(); };
 /* ---------- اختيار معايير التقرير ---------- */
 ACT.report = async el => {
   const r = el.dataset.r, st = App.st;
-  if (r !== 'schedule' && r !== 'attendance' && r !== 'students' && !(await needReveal())) return;
+  if (!['schedule', 'attendance', 'students', 'projAtt', 'projQ'].includes(r) && !(await needReveal())) return;
   const groupSel = (sel) => `<label class="field">المجموعة<select class="input select" id="rp-g">${st.groups.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(E.SUBJ[g.subjectId].name + ' · ' + E.groupLabel(st, g))}</option>`).join('')}</select></label>`;
   const monthSel = `<label class="field">الشهر<input class="input" type="month" id="rp-m" value="${E.today().slice(0, 7)}"></label>`;
   const termOpts = [...(st.settings.terms || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`), '<option value="year">السنة كاملة</option>', '<option value="month">شهر</option>'].join('');
@@ -233,15 +236,22 @@ ACT.report = async el => {
   else if (r === 'term') { title = 'تقرير الترم / السنة'; body = `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts.replace('<option value="month">شهر</option>', '')}</select></label>`; }
   else if (r === 'project') { title = 'مستلزمات المشروع'; body = `<label class="field">البند<select class="input select" id="rp-i"><option value="">كل البنود</option>${st.projectItems.map(it => `<option value="${it.id}" ${it.id === el.dataset.i ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></label>`; }
   else if (r === 'student') { title = 'كشف حساب طالب'; body = `<label class="field">الطالب<select class="input select" id="rp-s">${st.students.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>`; }
+  else if (r === 'projAtt' || r === 'projQ') {
+    const gs = st.groups.filter(g => g.subjectId === 'g3a');
+    if (!gs.length) return toast('مفيش مجموعات مشروع تخرج', { type: 'warn' });
+    title = r === 'projAtt' ? 'الغياب والخصومات' : 'تقييم الأسئلة';
+    body = `<label class="field">المجموعة<select class="input select" id="rp-g"><option value="">كل المجموعات</option>${gs.map(g => `<option value="${g.id}" ${g.id === App.ui.projGroup ? 'selected' : ''}>${esc(E.groupLabel(st, g))}</option>`).join('')}</select></label>`;
+    if (r === 'projQ' && el.dataset.q) body += `<input type="hidden" id="rp-q" value="${el.dataset.q}">`;
+  }
   else if (r === 'students') { title = 'قائمة الطلاب'; body = `<label class="field">الصف<select class="input select" id="rp-gr"><option value="0">كل الصفوف</option><option value="1">الصف الأول</option><option value="2">الصف الثاني</option><option value="3">الصف الثالث</option></select></label>`; }
   if (['group', 'attendance'].includes(r) && !st.groups.length) return toast('مفيش مجموعات لسه', { type: 'warn' });
   if (r === 'student' && !st.students.length) return toast('مفيش طلاب لسه', { type: 'warn' });
   if (!body) return Print[r]({});
-  const s = sheet(`<h2>${title}</h2>${body}<button class="btn lg" id="rp-ok">${ic('print', 20)} طباعة / حفظ PDF</button>`);
+  const s = sheet(`<h2>${title}</h2>${body}<button class="btn lg" id="rp-ok">${ic('eye', 20)} عرض التقرير</button>`);
   const mEl = $('#rp-m', s.el), pEl = $('#rp-p', s.el);
   if (mEl && pEl) { const sync = () => { mEl.closest('label').hidden = pEl.value !== 'month'; }; pEl.onchange = sync; sync(); }
   $('#rp-ok', s.el).onclick = () => {
-    const o = {}; [['g', 'rp-g'], ['m', 'rp-m'], ['p', 'rp-p'], ['i', 'rp-i'], ['s', 'rp-s'], ['gr', 'rp-gr']].forEach(([k, id]) => { const x = $('#' + id, s.el); if (x) o[k] = x.value; });
+    const o = {}; [['g', 'rp-g'], ['m', 'rp-m'], ['p', 'rp-p'], ['i', 'rp-i'], ['s', 'rp-s'], ['gr', 'rp-gr'], ['q', 'rp-q']].forEach(([k, id]) => { const x = $('#' + id, s.el); if (x) o[k] = x.value; });
     s.close(); Print[r](o);
   };
 };
@@ -249,16 +259,9 @@ ACT.printSchedule = () => Print.schedule({});
 ACT.printStudent = async el => { if (await needReveal()) Print.student({ s: el.dataset.s }); };
 
 /* ---------- الطباعة ---------- */
-function doPrint(title, sub, html) {
-  const st = App.st;
-  const root = $('#print-root');
-  root.innerHTML = `<h1>${esc(title)}</h1><div class="meta"><span>${esc(sub || '')}</span><span>${esc(st.settings.appName)} · اتطبع ${E.fmtDate(E.today())} ${E.fmtTime(nowHM())}</span></div>${html}<div class="foot">${esc(st.settings.appName)}</div>`;
-  document.body.classList.add('printing');
-  const done = () => { document.body.classList.remove('printing'); window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done);
-  setTimeout(() => { window.print(); setTimeout(done, 1500); }, 60);
-}
+function doPrint(title, sub, html) { Report.open(title, sub, html); }
 const td = (v, cls) => `<td class="${cls || ''}">${v}</td>`;
+window.td = td;
 const f0 = n => fmt(n);
 function periodFromOpt(o) { return o.p === 'month' || (!o.p && o.m) ? { from: o.m + '-01', to: E.monthEnd(o.m + '-01'), label: 'شهر ' + E.monthLabel(o.m + '-01') } : periodOf(o.p || 'year'); }
 const Print = {

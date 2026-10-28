@@ -9,43 +9,20 @@ function migrate(s) {
   ['prices', 'reminders', 'privacy', 'backup'].forEach(k => { out.settings[k] = Object.assign({}, d.settings[k], (s.settings || {})[k] || {}); });
   if (!Array.isArray(out.settings.terms) || !out.settings.terms.length) out.settings.terms = d.settings.terms;
   if (!Array.isArray(out.settings.holidays)) out.settings.holidays = [];
-  ['groups', 'students', 'makeups', 'payments', 'projectItems'].forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
-  ['overrides', 'attendance', 'projectPays'].forEach(k => { if (!out[k] || typeof out[k] !== 'object') out[k] = {}; });
+  ['groups', 'students', 'makeups', 'payments', 'projectItems', 'questions'].forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
+  ['overrides', 'attendance', 'projectPays', 'qgrades'].forEach(k => { if (!out[k] || typeof out[k] !== 'object') out[k] = {}; });
   out.students.forEach(st => { st.enrollments = st.enrollments || []; st.enrollments.forEach(e => { if (!e.groupHist) e.groupHist = [{ from: e.startDate, groupId: e.groupId }]; }); });
   out.groups.forEach(g => { if (!g.schedule) g.schedule = [{ from: '2000-01-01', day: g.day, time: g.time }]; });
   return out;
 }
 window.migrate = migrate;
 
-/* ---------- الهوية: الاسم والأيقونة ---------- */
-function iconPng(size) {
-  const s = App.st.settings;
-  return new Promise(res => {
-    const c = document.createElement('canvas'); c.width = c.height = size;
-    const x = c.getContext('2d');
-    const img = new Image();
-    img.onload = () => { x.drawImage(img, 0, 0, size, size); try { res(c.toDataURL('image/png')); } catch (e) { res(null); } };
-    img.onerror = () => res(null);
-    if (s.iconData) img.src = s.iconData;
-    else img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><rect width="24" height="24" fill="${s.accent}"/><g transform="translate(5.5 5.5) scale(.54)" fill="none" stroke="#10213A" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">${I[s.iconId] || I.bolt}</g></svg>`);
-  });
-}
-let manifestUrl = null;
-async function applyIdentity() {
+/* ---------- الهوية: الاسم جوه التطبيق ----------
+ * أيقونة واسم التطبيق المثبت ثابتين في manifest.webmanifest (أندرويد مش بيقبل manifest متغير) */
+function applyIdentity() {
   const s = App.st.settings;
   document.title = s.appName;
   const meta = $('meta[name="apple-mobile-web-app-title"]'); if (meta) meta.content = s.appName;
-  const custom = s.appName !== 'حصصي' || s.iconId !== 'bolt' || s.iconData || s.accent !== '#E8962E';
-  if (!custom) return;
-  const [p512, p192] = await Promise.all([iconPng(512), iconPng(192)]);
-  if (!p512) return;
-  $$('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => { l.href = l.rel === 'icon' ? p192 : p512; });
-  const base = new URL('./', location.href).href;
-  const m = { name: s.appName, short_name: s.appName, start_url: base + 'index.html', scope: base, id: base + '?app=hesasy', display: 'standalone', orientation: 'portrait', dir: 'rtl', lang: 'ar', background_color: '#10213A', theme_color: '#10213A',
-    icons: [{ src: p192, sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: p512, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: p512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
-  if (manifestUrl) URL.revokeObjectURL(manifestUrl);
-  manifestUrl = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
-  const l = $('link[rel="manifest"]'); if (l) l.href = manifestUrl;
 }
 window.applyIdentity = applyIdentity;
 
@@ -188,16 +165,19 @@ function dailyChecks() {
   if (localStorage.getItem('hesasy-daily') === t) return;
   const late = [...App.C.ledgers.values()].filter(L => L.late > 0).sort((a, b) => b.late - a.late);
   const today = E.sessionsOnDay(App.st, t);
-  const showLate = R.overdue && late.length;
+  const al = E.dueAlerts(App.st, App.C);
+  const showLate = R.overdue && (late.length || al.ended.length || al.third.length);
   if (!R.daily && !showLate) return;
   if (!App.st.groups.length) return;
   localStorage.setItem('hesasy-daily', t);
   const s = sheet(`
     <div class="alarm-ic ${showLate ? '' : 'amber'}">${ic(showLate ? 'alert' : 'bell', 40)}</div>
     <h2 style="text-align:center">${new Date().getHours() < 12 ? 'صباح الخير' : 'مساء الخير'} — ملخص النهارده</h2>
-    ${showLate ? `<div class="banner red">${ic('wallet', 18)}<span><b>${late.length} ${late.length > 10 || late.length < 3 ? 'طالب' : 'طلاب'} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 5).map(L => esc(L.student.name)).join('، ')}${late.length > 5 ? ' و' + (late.length - 5) + ' كمان' : ''}</span></div>` : ''}
+    ${R.overdue && late.length ? `<div class="banner red">${ic('wallet', 18)}<span><b>${late.length} ${late.length > 10 || late.length < 3 ? 'طالب' : 'طلاب'} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 5).map(L => esc(L.student.name)).join('، ')}${late.length > 5 ? ' و' + (late.length - 5) + ' كمان' : ''}</span></div>` : ''}
+    ${R.overdue && al.ended.length ? `<div class="banner red">${ic('alert', 18)}<span><b>${al.ended.length} خلصوا الشهر ولسه مدفعوش</b><br>${al.ended.slice(0, 5).map(r => esc(r.L.student.name)).join('، ')}${al.ended.length > 5 ? ' و' + (al.ended.length - 5) + ' كمان' : ''}</span></div>` : ''}
+    ${R.overdue && al.third.length ? `<div class="banner amber">${ic('bell', 18)}<span><b>${al.third.length} وصلوا الحصة التالتة ولسه مدفعوش</b><br>${al.third.slice(0, 5).map(r => esc(r.L.student.name)).join('، ')}${al.third.length > 5 ? ' و' + (al.third.length - 5) + ' كمان' : ''}</span></div>` : ''}
     ${R.daily ? (today.length ? `<div class="label-sm">حصص النهارده (${today.filter(o => o.status === 'normal').length})</div>${today.map(o => sessionCard(o)).join('')}` : '<div class="banner blue">' + ic('cal', 18) + '<span>مفيش حصص النهارده</span></div>') : ''}
-    <div class="grid2">${showLate ? '<a class="btn danger-ghost" href="#/dues" data-close>المتأخرات</a>' : '<a class="btn ghost" href="#/schedule" data-close>الجدول</a>'}<button class="btn" data-close>تمام</button></div>`, { center: true });
+    <div class="grid2">${showLate ? '<a class="btn danger-ghost" href="#/dues" data-close>التحصيل</a>' : '<a class="btn ghost" href="#/schedule" data-close>الجدول</a>'}<button class="btn" data-close>تمام</button></div>`, { center: true });
   s.el.addEventListener('click', e => { if (e.target.closest('a.session')) s.close(); });
   Sound.play(showLate ? 'alert' : 'chime');
 }
@@ -208,7 +188,7 @@ async function sysNotify(title, body, url, tag) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
     const reg = await navigator.serviceWorker.ready;
-    reg.showNotification(title, { body, tag, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', vibrate: [200, 100, 200], data: { url }, dir: 'rtl', lang: 'ar' });
+    reg.showNotification(title, { body, tag, renotify: true, icon: 'icons/logo-192.png', badge: 'icons/logo-96.png', vibrate: [200, 100, 200], data: { url }, dir: 'rtl', lang: 'ar' });
   } catch (e) {}
 }
 function checkReminders() {

@@ -62,7 +62,7 @@ Views.home = () => {
       <div class="brand">${brandIcon()}<div class="stack"><div class="brand-name">${esc(st.settings.appName)}</div><div class="sub">${E.fmtDate(t)}${E.termOf(st, t) ? ' · ' + esc(E.termOf(st, t).name) : ''}</div></div></div>
       <div class="head-actions">
         ${eyeBtn()}
-        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${ic('bell', 22, 2, late.length ? 'ring' : '')}${late.length + today.filter(o => sessionState(o).need).length ? `<span class="badge">${late.length + today.filter(o => sessionState(o).need).length}</span>` : ''}</button>
+        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${(() => { const al = E.dueAlerts(st, C); const n = late.length + al.ended.length + al.third.length + today.filter(o => sessionState(o).need).length; return ic('bell', 22, 2, n ? 'ring' : '') + (n ? `<span class="badge">${n}</span>` : ''); })()}</button>
         <a class="icon-btn" href="#/settings" aria-label="الإعدادات">${ic('gear', 22)}</a>
       </div>
     </div>
@@ -115,6 +115,7 @@ ACT.notifs = () => {
   const need = st.groups.flatMap(g => E.occurrences(st, g.id, E.addDays(t, -14), t)).filter(o => sessionState(o).need);
   const next = E.sessionsOnDay(st, t).filter(o => o.status === 'normal' && minutesUntil(o.date, o.time) > 0);
   const s = sheet(`<h2>التنبيهات</h2>
+    ${dueAlertsHTML()}
     ${late.length ? `<div class="banner red">${ic('alert', 18)}<span><b>${late.length} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 6).map(L => esc(L.student.name) + ' (' + money(L.late) + ')').join('، ')}${late.length > 6 ? ' …' : ''}</span></div>` : `<div class="banner green">${ic('check', 18)}<span>مفيش طلاب متأخرين شهرين</span></div>`}
     ${need.length ? `<div class="label-sm">حصص محتاجة تسجيل غياب</div>${need.map(o => sessionCard(o, { showDate: true })).join('')}` : ''}
     ${next.length ? `<div class="label-sm">الحصص الجاية النهارده</div>${next.map(o => sessionCard(o)).join('')}` : ''}

@@ -56,7 +56,7 @@
       seq: 1,
       settings: {
         appName: 'حصصي',
-        iconId: 'bolt',
+        iconId: 'logo',
         iconData: null,
         accent: '#E8962E',
         prices: { single: 250, g1Bundle: 400, g2Bundle: 700, project: 400 },
@@ -76,7 +76,9 @@
       attendance: {},
       payments: [],
       projectItems: [],
-      projectPays: {}
+      projectPays: {},
+      questions: [],
+      qgrades: {}
     };
   }
 
@@ -338,6 +340,95 @@
     return out.sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
   }
 
+  /* ---------- مشروع التخرج: خصم الغياب وتقييم الأسئلة ---------- */
+  const PROJ_DEFAULT = { steps: [5, 10, 15, 20], forgive: true, lateDays: 7, lateWeek: 25, lateAfter: 50, maxQ: 10 };
+  const projRules = st => Object.assign({}, PROJ_DEFAULT, (st.settings && st.settings.project) || {});
+  const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
+  const round2 = n => Math.round(n * 100) / 100;
+
+  /* خصم الشهر: أول غياب 5، التاني 10، التالت 15، الرابع 20 (تراكمي).
+   * لو غاب مرة واحدة بس في الشهر → سماح ومفيش خصم. أكتر من مرة → الخصم كامل من أول غياب. */
+  function absenceDeduction(st, abs) {
+    const R = projRules(st);
+    if (abs <= 0 || (R.forgive && abs === 1)) return 0;
+    let t = 0;
+    for (let i = 0; i < abs; i++) t += +R.steps[Math.min(i, R.steps.length - 1)] || 0;
+    return t;
+  }
+  /* شهور الطالب في مشروع التخرج: كل ٤ حصص محسوبة = شهر، بنفس دورة الحساب */
+  function projectCycles(st, s, asOf) {
+    asOf = asOf || today();
+    const R = projRules(st);
+    const out = [];
+    s.enrollments.filter(e => e.subjectId === 'g3a').sort((a, b) => a.startDate.localeCompare(b.startDate)).forEach(e => {
+      const all = enrollmentSessions(st, e, addDays(asOf, 70));
+      const ended = !!e.endDate && e.endDate <= asOf;
+      for (let i = 0; i < all.length; i += 4) {
+        const ses = all.slice(i, i + 4);
+        if (ses[0].date > asOf) break;
+        const items = ses.map(o => {
+          const v = (st.attendance[o.key] || {})[s.id];
+          const mark = o.date > asOf ? 'future' : v === 'a' ? 'a' : v === 'p' ? 'p' : 'none';
+          return { key: o.key, date: o.date, time: o.time, type: o.type, mark };
+        });
+        const abs = items.filter(x => x.mark === 'a').length;
+        const complete = (ses.length === 4 && ses[3].date <= asOf) || (ended && items.every(x => x.mark !== 'future'));
+        out.push({
+          enrollmentId: e.id, groupId: groupOfEnrollment(e, ses[0].date), from: ses[0].date, to: ses[ses.length - 1].date,
+          items, abs, pres: items.filter(x => x.mark === 'p').length, none: items.filter(x => x.mark === 'none').length,
+          deduction: absenceDeduction(st, abs), forgiven: R.forgive && abs === 1, complete
+        });
+      }
+    });
+    out.forEach((c, i) => { c.n = i + 1; });
+    return out;
+  }
+  /* طلاب الصف التالت في مجموعات معينة (أو الكل) */
+  function projectRoster(st, groupIds, since) {
+    const ids = groupIds && groupIds.length ? groupIds : st.groups.filter(g => SUBJ[g.subjectId] && SUBJ[g.subjectId].grade === 3).map(g => g.id);
+    const out = [];
+    for (const s of st.students) {
+      if (s.grade !== 3) continue;
+      const e = s.enrollments.filter(x => x.subjectId === 'g3a' && (!x.endDate || x.endDate >= (since || today()))).pop();
+      if (!e) continue;
+      const gid = currentGroupId(e);
+      if (ids.includes(gid)) out.push({ student: s, groupId: gid });
+    }
+    return out.sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
+  }
+  /* درجة السؤال بعد خصم التأخير: في الميعاد كاملة، أول أسبوع بعده −ربع الدرجة، بعد كده −نصها */
+  function questionResult(st, q, rec) {
+    if (!rec || rec.raw == null || rec.raw === '') return null;
+    const R = projRules(st);
+    const max = +q.max || R.maxQ;
+    const raw = Math.max(0, Math.min(max, +rec.raw));
+    const late = q.due ? Math.max(0, diffDays(q.due, rec.date)) : 0;
+    const pct = late === 0 ? 0 : late <= R.lateDays ? R.lateWeek : R.lateAfter;
+    return { raw, max, date: rec.date, late, pct, minus: round2(raw * pct / 100), final: round2(raw * (1 - pct / 100)) };
+  }
+  function studentQuestions(st, s) {
+    return (st.questions || []).map(q => {
+      const inIt = projectRoster(st, q.groupIds, q.created).some(x => x.student.id === s.id);
+      return { q, inIt, res: questionResult(st, q, (st.qgrades || {})[q.id + '|' + s.id]) };
+    }).filter(x => x.inIt || x.res);
+  }
+
+  /* ---------- تذكيرات التحصيل ----------
+   * third: وصل الحصة التالتة في الشهر ولسه مدفعش · ended: خلص الـ٤ حصص ولسه مدفعش */
+  function dueAlerts(st, C) {
+    const third = [], ended = [];
+    for (const L of C.ledgers.values()) {
+      const cur = L.charges.filter(c => c.latest && c.due > 0);
+      if (!cur.length) continue;
+      const held = Math.max(...cur.map(c => c.held));
+      const amount = cur.reduce((a, c) => a + c.due, 0);
+      const row = { L, held, amount, subjects: cur.map(c => c.subjectId) };
+      if (held >= 4) ended.push(row); else if (held === 3) third.push(row);
+    }
+    const by = (a, b) => b.amount - a.amount;
+    return { third: third.sort(by), ended: ended.sort(by) };
+  }
+
   /* ---------- ملف التقويم (.ics) لتذكير الحصص من تقويم الموبايل ---------- */
   function icsFor(st, before) {
     const byday = { 6: 'SA', 0: 'SU', 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR' };
@@ -375,7 +466,8 @@
     iso, parse, addDays, dow, today, monthKey, monthStart, monthEnd, addMonths, monthName, monthLabel, weekStart, fmtDate, fmtShort, fmtTime,
     defaultState, uid, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
-    cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor
+    cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
+    PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;
 })(typeof window !== 'undefined' ? window : globalThis);

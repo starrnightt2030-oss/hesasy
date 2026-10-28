@@ -314,27 +314,78 @@ textarea.input { padding: 12px 14px; min-height: 80px; resize: vertical; }
 /* ---------- الطباعة ---------- */
 #print-root { display: none; }
 @media print {
-  @page { size: A4; margin: 12mm; }
+  @page { size: A4; margin: 10mm; }
   body { background: #fff; }
-  body.printing #app, body.printing .toast-wrap, body.printing .overlay { display: none !important; }
+  body.printing #app, body.printing .toast-wrap, body.printing .overlay, body.printing .rv, body.printing #lock-root { display: none !important; }
   body.printing #print-root { display: block; }
+  .rpt { width: auto !important; padding: 0 !important; box-shadow: none !important; }
 }
-#print-root { direction: rtl; font-family: var(--font); color: #000; font-size: 12pt; }
-#print-root h1 { font-size: 18pt; margin-bottom: 2mm; }
-#print-root .meta { color: #333; font-size: 10pt; margin-bottom: 5mm; display: flex; justify-content: space-between; border-bottom: 2px solid #10213A; padding-bottom: 3mm; }
-#print-root table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 10.5pt; page-break-inside: auto; }
-#print-root tr { page-break-inside: avoid; }
-#print-root th { background: #10213A; color: #fff; padding: 2.2mm 2mm; text-align: right; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-#print-root td { border-bottom: 1px solid #ccc; padding: 2mm; }
-#print-root tr:nth-child(even) td { background: #F4F6F9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-#print-root tfoot td { font-weight: 700; border-top: 2px solid #10213A; background: #FFF1DC !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-#print-root h2 { font-size: 13pt; margin: 4mm 0 2mm; }
-#print-root .c { text-align: center; }
-#print-root .red { color: #B42318; font-weight: 700; }
-#print-root .green { color: #157A4F; font-weight: 700; }
-#print-root .sched td { vertical-align: top; height: 18mm; }
-#print-root .sched .it { border-radius: 2mm; padding: 1.5mm 2mm; margin-bottom: 1.5mm; font-size: 9.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-#print-root .boxes { display: flex; gap: 4mm; margin-bottom: 5mm; }
-#print-root .boxes div { flex: 1; border: 1px solid #ccc; border-radius: 3mm; padding: 3mm; }
-#print-root .boxes b { display: block; font-size: 15pt; }
-#print-root .foot { margin-top: 8mm; font-size: 9pt; color: #555; text-align: center; }
+
+/* ---------- التقارير (A4) ---------- */
+.rpt { direction: rtl; font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; color: #172033; background: #fff; font-size: 10.5pt; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rpt * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rpt .r-head { display: flex; align-items: center; gap: 4mm; padding-bottom: 4mm; border-bottom: 3px solid #10213A; margin-bottom: 5mm; }
+.rpt .r-logo { width: 15mm; height: 15mm; border-radius: 3.5mm; object-fit: cover; flex-shrink: 0; }
+.rpt .r-title { flex: 1; min-width: 0; }
+.rpt h1 { font-family: 'Readex Pro', 'IBM Plex Sans Arabic', sans-serif; font-size: 17pt; margin: 0; line-height: 1.3; color: #10213A; }
+.rpt .r-sub { font-size: 10pt; color: #4A5263; margin-top: 1mm; }
+.rpt .r-meta { text-align: left; font-size: 8.5pt; color: #5B6476; line-height: 1.6; flex-shrink: 0; }
+.rpt .r-meta b { display: block; font-family: 'Readex Pro', sans-serif; font-size: 11pt; color: #10213A; }
+.rpt h2 { font-family: 'Readex Pro', 'IBM Plex Sans Arabic', sans-serif; font-size: 12pt; margin: 6mm 0 2.5mm; color: #10213A; display: flex; align-items: center; gap: 2mm; }
+.rpt h2::before { content: ''; width: 1.6mm; height: 5mm; border-radius: 1mm; background: #E8962E; display: inline-block; }
+.rpt h3 { font-size: 10.5pt; margin: 4mm 0 1.5mm; color: #1B3152; }
+.rpt table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 4mm; font-size: 9.5pt; border: 1px solid #D5DBE4; border-radius: 2.5mm; overflow: hidden; }
+.rpt tr { page-break-inside: avoid; break-inside: avoid; }
+.rpt thead { display: table-header-group; }
+.rpt th { background: #10213A; color: #fff; padding: 2.2mm 2mm; text-align: right; font-weight: 600; font-size: 9pt; white-space: nowrap; }
+.rpt td { border-top: 1px solid #E3E7EE; padding: 1.9mm 2mm; vertical-align: middle; }
+.rpt tbody tr:nth-child(even) td { background: #F6F8FB; }
+.rpt tfoot td { font-weight: 700; border-top: 2px solid #10213A; background: #FFF4E3 !important; }
+.rpt .c { text-align: center; }
+.rpt .n { font-family: 'Readex Pro', sans-serif; font-feature-settings: 'tnum'; white-space: nowrap; }
+.rpt .red { color: #B42318; font-weight: 700; }
+.rpt .green { color: #157A4F; font-weight: 700; }
+.rpt .amber { color: #8A4B05; font-weight: 700; }
+.rpt .muted { color: #6B7385; }
+.rpt .boxes { display: flex; gap: 3mm; margin-bottom: 4mm; }
+.rpt .boxes > div { flex: 1; border: 1px solid #D5DBE4; border-top: 3px solid #10213A; border-radius: 2.5mm; padding: 2.5mm 3mm; font-size: 8.5pt; color: #4A5263; background: #FBFCFD; }
+.rpt .boxes > div.g { border-top-color: #157A4F; } .rpt .boxes > div.r { border-top-color: #B42318; } .rpt .boxes > div.a { border-top-color: #E8962E; }
+.rpt .boxes b { display: block; font-family: 'Readex Pro', sans-serif; font-size: 14pt; color: #172033; margin-top: .5mm; white-space: nowrap; }
+.rpt .boxes b.red { color: #B42318; } .rpt .boxes b.green { color: #157A4F; }
+.rpt .tag { display: inline-block; padding: .4mm 2.2mm; border-radius: 10mm; font-size: 8pt; font-weight: 700; white-space: nowrap; }
+.rpt .tag.r { background: #FDECEC; color: #B42318; } .rpt .tag.g { background: #E6F4EC; color: #157A4F; } .rpt .tag.a { background: #FFF1DC; color: #8A4B05; } .rpt .tag.b { background: #E8EEFB; color: #1D4AA8; } .rpt .tag.x { background: #EEF0F4; color: #4A5263; }
+.rpt .mk { display: inline-flex; width: 5.2mm; height: 5.2mm; border-radius: 1.4mm; align-items: center; justify-content: center; font-size: 8pt; font-weight: 700; }
+.rpt .mk.p { background: #E6F4EC; color: #157A4F; } .rpt .mk.a { background: #FDECEC; color: #B42318; } .rpt .mk.o { background: #EEF0F4; color: #8A93A3; } .rpt .mk.f { border: 1px dashed #C9D3E3; color: #9AA7BC; }
+.rpt .note { background: #F6F8FB; border: 1px solid #E3E7EE; border-radius: 2.5mm; padding: 2.5mm 3mm; font-size: 8.5pt; color: #4A5263; margin-bottom: 4mm; }
+.rpt .sched td { vertical-align: top; }
+.rpt .sched .it { border-radius: 2mm; padding: 1.5mm 2.5mm; margin-bottom: 1.5mm; font-size: 9pt; }
+.rpt .foot { margin-top: 6mm; padding-top: 2.5mm; border-top: 1px solid #E3E7EE; font-size: 8pt; color: #6B7385; display: flex; justify-content: space-between; }
+.rpt .sign { display: flex; justify-content: space-between; margin-top: 10mm; font-size: 9.5pt; color: #4A5263; }
+.rpt .sign span { border-top: 1px dotted #9AA7BC; padding-top: 1.5mm; min-width: 45mm; text-align: center; }
+
+/* ---------- معاينة التقرير ---------- */
+.rv { position: fixed; inset: 0; z-index: 360; background: #3B4352; display: flex; flex-direction: column; animation: fade .2s ease; }
+.rv-bar { background: var(--ink); color: #fff; padding: calc(10px + var(--safe-t)) 12px 10px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+.rv-bar .row { gap: 8px; }
+.rv-bar h2 { font-size: 16px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rv-actions .btn { min-height: 44px; font-size: 13px; padding: 0 6px; }
+.rv-scroll { flex: 1; overflow: auto; padding: 14px 12px calc(24px + var(--safe-b)); -webkit-overflow-scrolling: touch; }
+.rv-page { background: #fff; width: 794px; min-height: 1123px; padding: 38px 40px 30px; box-sizing: border-box; margin: 0 auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); transform-origin: top right; }
+.rv-note { color: #C9D3E3; font-size: 12px; text-align: center; margin-top: 8px; }
+.rv-shot { position: fixed; left: -12000px; top: 0; z-index: -1; pointer-events: none; }
+.rv-shot .rpt { width: 794px; padding: 0 40px; box-sizing: border-box; }
+
+/* ---------- نقط الحضور (مشروع التخرج) ---------- */
+.adots { display: inline-flex; gap: 4px; direction: rtl; }
+.ad { width: 22px; height: 22px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.ad.p { background: var(--green-soft); color: var(--green); }
+.ad.a { background: var(--red-soft); color: var(--red); }
+.ad.o { background: #EEF0F4; color: #8A93A3; }
+.ad.f { border: 1.5px dashed var(--field); color: transparent; }
+.legend .ad { width: 18px; height: 18px; font-size: 10px; border-radius: 5px; }
+.adate { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 9px; white-space: nowrap; }
+.adate.p { background: var(--green-soft); color: var(--green-text); }
+.adate.a { background: var(--red-soft); color: var(--red); }
+.adate.o { background: #EEF0F4; color: var(--muted-2); }
+.adate.f { border: 1.5px dashed var(--field); color: var(--muted); }

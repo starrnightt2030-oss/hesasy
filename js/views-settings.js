@@ -14,10 +14,10 @@ Views.settings = () => {
       <div class="card" style="display:flex;flex-direction:column;gap:14px">
         <div class="row" style="gap:14px">${brandIcon(64)}
           <label class="field grow">اسم التطبيق<input class="input" id="set-name" value="${esc(S.appName)}" maxlength="24" data-change="setName"></label></div>
-        <div class="field">الأيقونة<div class="icon-grid">${APP_ICONS.map(n => `<button data-act="setIcon" data-n="${n}" class="${!S.iconData && S.iconId === n ? 'on' : ''}" aria-label="أيقونة ${n}">${ic(n, 22)}</button>`).join('')}</div>
+        <div class="field">الأيقونة<div class="icon-grid">${APP_ICONS.map(n => `<button data-act="setIcon" data-n="${n}" class="${!S.iconData && S.iconId === n ? 'on' : ''}" aria-label="أيقونة ${n === 'logo' ? 'حصصي' : n}" ${n === 'logo' ? 'style="padding:3px;background:#fff"' : ''}>${n === 'logo' ? '<img src="icons/logo-96.png" alt="" style="width:100%;height:100%;border-radius:10px;object-fit:cover">' : ic(n, 22)}</button>`).join('')}</div>
           <button class="btn ghost sm" style="border-style:dashed" data-act="setIconImg">${ic('image', 18)} صورة من الموبايل</button></div>
         <div class="row between"><span class="b">اللون الأساسي</span><div class="swatches">${ACCENTS.map(c => `<button data-act="setAccent" data-c="${c}" class="${S.accent === c ? 'on' : ''}" style="background:${c}" aria-label="لون ${c}"></button>`).join('')}</div></div>
-        <div class="banner blue">${ic('info', 18)}<span>الاسم والأيقونة بيتغيروا جوه التطبيق على طول. علشان يتغيروا على الشاشة الرئيسية للموبايل، امسح الاختصار القديم وثبّت التطبيق تاني.</span></div>
+        <div class="banner blue">${ic('info', 18)}<span>الاسم والأيقونة والألوان اللي هنا بتظهر جوه التطبيق. أيقونة التطبيق المثبت على الشاشة الرئيسية هي أيقونة "حصصي" الرسمية.</span></div>
       </div></section>
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">الأسعار والعروض</h2>
@@ -25,6 +25,15 @@ Views.settings = () => {
         <label class="set-row"><span class="stack"><span class="b">${n}</span><span class="small muted">${h}</span></span>
           <span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${P[k]}" data-change="setPrice" data-k="${k}" style="width:84px;text-align:center;font-weight:700"><span class="sm muted">ج</span></span></label>`).join('')}</div>
       <div class="small muted" style="padding:0 4px">تغيير السعر بيأثر على كل الحسابات (القديمة والجديدة).</div></section>
+
+    <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">قواعد مشروع التخرج</h2>
+      <div class="card tight">
+        <div class="set-row" style="flex-direction:column;align-items:stretch;gap:8px"><span class="stack"><span class="b">خصم الغياب في الشهر</span><span class="small muted">درجات بتتخصم عن كل غياب (الأول، التاني، التالت، الرابع)</span></span>
+          <div class="grid3" style="grid-template-columns:repeat(4,minmax(0,1fr))">${E.projRules(st).steps.map((v, i) => `<label class="stack small muted" style="gap:4px;text-align:center">${['الأول', 'التاني', 'التالت', 'الرابع'][i]}<input class="input sm num" type="number" inputmode="numeric" value="${v}" data-change="setProj" data-k="step${i}" style="text-align:center;font-weight:700"></label>`).join('')}</div></div>
+        <div class="set-row"><span class="stack"><span class="b">سماح غياب مرة واحدة</span><span class="small muted">لو غاب مرة واحدة بس في الشهر ميتخصمش منه</span></span><button class="switch" role="switch" aria-checked="${E.projRules(st).forgive}" aria-label="سماح غياب مرة واحدة" data-act="tForgive"></button></div>
+        <label class="set-row"><span class="stack"><span class="b">تأخير التسليم لحد ${E.projRules(st).lateDays} أيام</span><span class="small muted">نسبة الخصم من درجة السؤال</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateWeek}" data-change="setProj" data-k="lateWeek" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></label>
+        <label class="set-row"><span class="stack"><span class="b">تأخير أكتر من ${E.projRules(st).lateDays} أيام</span><span class="small muted">نسبة الخصم من درجة السؤال</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateAfter}" data-change="setProj" data-k="lateAfter" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></label>
+      </div></section>
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">السنة الدراسية والإجازات</h2>
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
@@ -105,6 +114,15 @@ ACT.setIconImg = async () => {
   img.src = URL.createObjectURL(f);
 };
 ACT.setPrice = el => { const v = Math.round(+el.value); if (!(v >= 0)) return; commit(st => { st.settings.prices[el.dataset.k] = v; }, 'السعر اتعدل'); };
+ACT.setProj = el => {
+  const v = +el.value; if (!(v >= 0)) return;
+  commit(st => {
+    const p = st.settings.project = Object.assign({}, E.projRules(st), st.settings.project || {});
+    p.steps = p.steps.slice();
+    if (el.dataset.k.startsWith('step')) p.steps[+el.dataset.k.slice(4)] = v; else p[el.dataset.k] = Math.min(100, v);
+  }, 'اتحفظ');
+};
+ACT.tForgive = () => commit(st => { const p = st.settings.project = Object.assign({}, E.projRules(st), st.settings.project || {}); p.forgive = !p.forgive; });
 ACT.setTerm = el => { if (!el.value) return; commit(st => { st.settings.terms.find(t => t.id === el.dataset.t)[el.dataset.f] = el.value; }, 'التاريخ اتعدل'); };
 ACT.addHoliday = () => {
   const s = sheet(`<h2>إضافة إجازة</h2><label class="field">الاسم<input class="input" id="h-n" placeholder="مثلاً: إجازة نص السنة" autofocus></label>

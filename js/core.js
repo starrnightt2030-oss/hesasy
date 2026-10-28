@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.4.0'
+  version: '1.5.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -78,7 +78,7 @@ const I = {
   sun: '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
 };
 const ic = (name, size = 22, sw = 2, cls = '') => `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[name] || ''}</svg>`;
-const APP_ICONS = ['bolt', 'plug', 'bulb', 'book', 'cap', 'wallet', 'cpu', 'wrench', 'gearSm', 'star', 'cal', 'users'];
+const APP_ICONS = ['logo', 'bolt', 'plug', 'bulb', 'book', 'cap', 'wallet', 'cpu', 'wrench', 'gearSm', 'star', 'cal'];
 const ACCENTS = ['#E8962E', '#2BB673', '#4C8DFF', '#9B6BFF', '#E5484D', '#14B8A6'];
 
 /* ---------- الصوت والاهتزاز ---------- */
@@ -324,7 +324,7 @@ const eyeBtn = (light) => App.st.settings.privacy.hide ? `<button class="icon-bt
 ACT.reveal = () => reveal();
 function brandIcon(size) {
   const s = App.st.settings;
-  if (s.iconData) return `<span class="brand-icon" style="${size ? `width:${size}px;height:${size}px` : ''}"><img src="${s.iconData}" alt=""></span>`;
+  if (s.iconData || s.iconId === 'logo') return `<span class="brand-icon" style="background:#fff;${size ? `width:${size}px;height:${size}px;border-radius:${Math.round(size * .26)}px` : ''}"><img src="${s.iconData || 'icons/logo-192.png'}" alt=""></span>`;
   return `<span class="brand-icon" style="background:${s.accent};${size ? `width:${size}px;height:${size}px;border-radius:${Math.round(size * .3)}px` : ''}">${ic(s.iconId || 'bolt', size ? size * .5 : 24, 2.2)}</span>`;
 }
 const gradeChip = g => `<span class="chip g${g}">${E.GRADES[g]}</span>`;

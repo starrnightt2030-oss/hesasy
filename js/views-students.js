@@ -93,6 +93,7 @@ Views.student = id => {
         <button class="btn" data-act="pay" data-s="${s.id}">${ic('plus', 18, 2.4)} تسجيل دفعة</button>
         ${s.phone ? `<button class="btn green" data-act="waStudent" data-s="${s.id}">${ic('chat', 18)} ولي الأمر</button>` : `<a class="btn ghost" href="#/student-edit/${s.id}">${ic('phone', 18)} أضف موبايل</a>`}
       </div>
+      <button class="btn soft sm" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب كامل — طباعة أو صورة</button>
     </section>
 
     <section style="display:flex;flex-direction:column;gap:10px">
@@ -117,13 +118,14 @@ Views.student = id => {
       }).join('') : '<div class="sm muted" style="padding:14px 0">مفيش مواد</div>'}</div>
     </section>
 
+    ${s.grade === 3 ? projectStudentSections(s) : ''}
     <section class="grid2">
       <div class="card stack" style="gap:4px"><span class="small muted">الحضور (من ${total} حصة)</span><span class="num b" style="font-size:22px">${pres + abs ? Math.round(pres / (pres + abs) * 100) + '٪' : '—'}</span><span class="small" style="color:${abs ? 'var(--red)' : 'var(--green)'};font-weight:600">${pres + abs ? 'حضر ' + pres + ' · غاب ' + abs : total ? 'لسه مفيش غياب متسجل' : 'لسه مفيش حصص'}</span></div>
       <div class="card stack" style="gap:4px"><span class="small muted">دفع ${term ? esc(term.name) : 'الكل'}</span><span class="num b" style="font-size:22px">${money(termPaid)}</span><span class="small muted">${L.payments.length ? 'آخر دفعة ' + E.fmtShort(L.payments[L.payments.length - 1].date) : 'مفيش دفعات'}</span></div>
     </section>
 
     <section style="display:flex;flex-direction:column;gap:10px">
-      <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} كشف حساب</button></div>
+      <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button></div>
       <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.charges.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
         <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة · ' + E.payLabel(x.p)}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
           <span class="num b" style="color:var(--green)">+${money(x.p.amount)}</span><button class="icon-btn light" style="width:36px;height:36px" data-act="delPay" data-p="${x.p.id}" aria-label="حذف الدفعة">${ic('x', 16)}</button></div>` : `
