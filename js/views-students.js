@@ -354,7 +354,7 @@ ACT.sfSave = () => {
           }
         } else {
           const start = ($('[data-role=start]', c) || {}).value || E.today();
-          s.enrollments.push({ id: E.uid(st), subjectId: c.dataset.sub, groupHist: [{ from: start, groupId: gid }], startDate: start, endDate: null });
+          s.enrollments.push({ id: E.uid(st), subjectId: c.dataset.sub, groupHist: [{ from: start, groupId: gid }], startDate: start, endDate: null, registered: t });
         }
       }
       if (s.enrollments.some(e => !e.endDate)) s.status = 'active';

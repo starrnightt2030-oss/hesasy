@@ -169,14 +169,24 @@
   }
 
   /* ---------- الأسعار والعروض ---------- */
+  /* تاريخ تسجيل الاشتراك في المادة (مش تاريخ أول حصة) */
+  const regDate = (s, e) => e.registered || s.created || e.startDate;
+  /* أول دورة بتتحسب من يوم التسجيل أو أول حصة، أيهما أقدم — علشان الطالب اللي دفع الباقة
+   * يتحسبله كل المواد حتى لو مادة لسه حصتها الأولى مجتش */
+  const firstChargeDate = (s, e) => { const r = regDate(s, e); return r < e.startDate ? r : e.startDate; };
+
+  /* العرض بيتحدد بالمواد اللي الطالب مسجل فيها ومنسحبش منها — مش بالمواد اللي حصتها بدأت.
+   * D = بداية الدورة. في أول دورة بنشوف المواد اللي اتسجلت معاها لحد يوم تسجيلها. */
   function priceFor(st, student, e, D) {
     const P = st.settings.prices;
     const subj = SUBJ[e.subjectId];
     if (!subj) return { price: P.single, bundle: false };
     if (subj.grade === 3) return { price: P.project, bundle: false };
+    const r = regDate(student, e);
+    const at = D < r ? r : D;
     const active = new Set(
       student.enrollments
-        .filter(x => x.id === e.id || (SUBJ[x.subjectId] && SUBJ[x.subjectId].grade === subj.grade && x.startDate <= D && (!x.endDate || x.endDate > D)))
+        .filter(x => x.id === e.id || (SUBJ[x.subjectId] && SUBJ[x.subjectId].grade === subj.grade && regDate(student, x) <= at && (!x.endDate || x.endDate > at)))
         .map(x => x.subjectId)
     );
     if (subj.grade === 1 && active.has('g1a') && active.has('g1b')) return { price: P.g1Bundle / 2, bundle: true };
@@ -198,14 +208,15 @@
 
   /* ---------- الدورات (الشهور) والمستحقات ---------- */
   function enrollmentCharges(st, s, e, asOf) {
-    if (e.startDate > asOf) return [];
+    const first = firstChargeDate(s, e);
+    if (first > asOf) return [];
     const ses = enrollmentSessions(st, e, asOf);
     const n = ses.length;
     const ended = !!e.endDate && e.endDate <= asOf;
     const cycles = Math.max(1, Math.ceil(n / 4));
     const out = [];
     for (let k = 1; k <= cycles; k++) {
-      const start = k === 1 ? e.startDate : ses[4 * (k - 1)].date;
+      const start = k === 1 ? first : ses[4 * (k - 1)].date;
       const { price, bundle } = priceFor(st, s, e, start);
       const held = Math.max(0, Math.min(4, n - 4 * (k - 1)));
       let amount = price, partial = false;
@@ -362,7 +373,7 @@
   const E = {
     SUBJECTS, SUBJ, GRADES, WEEK, DAY_NAMES, MONTHS, METHODS, payMethod, payLabel,
     iso, parse, addDays, dow, today, monthKey, monthStart, monthEnd, addMonths, monthName, monthLabel, weekStart, fmtDate, fmtShort, fmtTime,
-    defaultState, uid, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
+    defaultState, uid, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor
   };
