@@ -117,6 +117,7 @@ ACT.notifs = () => {
   const s = sheet(`<h2>التنبيهات</h2>
     ${dueAlertsHTML()}
     ${late.length ? `<div class="banner red">${ic('alert', 18)}<span><b>${late.length} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 6).map(L => esc(L.student.name) + ' (' + money(L.late) + ')').join('، ')}${late.length > 6 ? ' …' : ''}</span></div>` : `<div class="banner green">${ic('check', 18)}<span>مفيش طلاب متأخرين شهرين</span></div>`}
+    ${(() => { const ready = st.groups.map(g => ({ g, c: freshCycle(g.id) })).filter(x => x.c); return ready.length ? `<div class="label-sm">ملخصات شهور خلصت (٤ حصص)</div><div class="card tight">${ready.map(({ g, c }) => `<button class="list-row tap" data-act="openGroupCycle" data-g="${g.id}" data-n="${c.n}" data-close><span class="dot g${E.SUBJ[g.subjectId].grade}"></span><span class="grow stack"><span class="b">${esc(E.SUBJ[g.subjectId].name)} · ${esc(E.groupLabel(st, g))}</span><span class="small muted">الشهر ${c.n} خلص ${E.fmtShort(c.to)} · اعرض الحضور والغياب</span></span>${ic('chev', 18)}</button>`).join('')}</div>` : ''; })()}
     ${need.length ? `<div class="label-sm">حصص محتاجة تسجيل غياب</div>${need.map(o => sessionCard(o, { showDate: true })).join('')}` : ''}
     ${next.length ? `<div class="label-sm">الحصص الجاية النهارده</div>${next.map(o => sessionCard(o)).join('')}` : ''}
     <div class="grid2"><a class="btn ghost" href="#/dues" data-close>التحصيل</a><button class="btn" data-close>تمام</button></div>`);
@@ -211,6 +212,7 @@ Views.session = key => {
   </main>` : `
   <div class="pad" style="padding-bottom:0;gap:10px">
     ${o.type === 'makeup' ? `<div class="banner blue">${ic('info', 18)}<span>حصة تعويضية عن حصة ${E.fmtDate(o.originDate)}</span></div>` : ''}
+    ${(() => { const c = E.groupCycles(st, g.id, E.today(), nowHM()).find(x => x.complete && x.sessions[x.sessions.length - 1].key === key); return c ? `<a class="banner green tap" href="#/group/${g.id}" data-act="openGroupCycle" data-g="${g.id}" data-n="${c.n}" style="text-decoration:none">${ic('check', 18)}<span><b>دي آخر حصة في الشهر ${c.n} للمجموعة.</b> افتح ملخص الشهر بالحضور والغياب لكل طالب ←</span></a>` : ''; })()}
     ${future ? `<div class="banner amber">${ic('clock', 18)}<span>الحصة دي لسه مجاتش — تقدر تأجلها أو تلغيها من دلوقتي.</span></div>` : ''}
     <div class="row between"><span class="row small muted" style="gap:6px">${ic('info', 16)} الحصة بتتحسب حضر أو غاب</span>
       ${list.length ? `<button class="btn sm ghost" data-act="allPresent" data-k="${esc(key)}">الكل حاضر</button>` : ''}</div>
@@ -238,6 +240,7 @@ Views.session = key => {
     ${list.length ? `<div class="row small muted" style="justify-content:center;gap:6px">${ic('check', 14)} الغياب بيتحفظ أول ما تدوس</div>` : ''}
   </div>`}`;
 };
+ACT.openGroupCycle = el => { App.ui.grpId = el.dataset.g; App.ui.grpCycle = +el.dataset.n; App.ui.grpSel = null; go('group', el.dataset.g); };
 ACT.att = el => {
   const { k, s, v } = el.dataset;
   Sound.play('tap');
@@ -296,25 +299,7 @@ ACT.cancelMakeup = async el => {
 };
 
 /* ---------- المجموعات ---------- */
-Views.groups = () => {
-  const st = App.st;
-  const count = gid => st.students.filter(s => s.enrollments.some(e => E.currentGroupId(e) === gid && !e.endDate)).length;
-  return `
-  <header class="plain-head">${backBtn()}<h1>المجموعات والمواعيد</h1></header>
-  <main class="pad">
-    <div class="banner blue">${ic('info', 18)}<span>المجموعة = مادة + يوم + ساعة. كل أسبوع الحصة بتتولد لوحدها في معادها. لو المادة ليها أكتر من مجموعة، اعمل لكل واحدة مجموعة.</span></div>
-    ${[1, 2, 3].map(gr => {
-      const gs = st.groups.filter(g => E.SUBJ[g.subjectId].grade === gr);
-      return `<section style="display:flex;flex-direction:column;gap:8px"><div class="row" style="gap:8px">${gradeChip(gr)}<span class="small muted">${gs.length} مجموعة</span></div>
-        ${gs.length ? `<div class="card tight">${gs.sort((a, b) => a.subjectId.localeCompare(b.subjectId)).map(g => `
-          <button class="list-row tap" data-act="editGroup" data-g="${g.id}">
-            <span class="dot g${gr}"></span>
-            <span class="grow stack"><span class="b">${esc(E.SUBJ[g.subjectId].name)}${g.name ? ' · ' + esc(g.name) : ''}</span><span class="small muted">${E.DAY_NAMES[E.currentSchedule(g).day]} · ${E.fmtTime(E.currentSchedule(g).time)} · ${count(g.id)} طالب</span></span>
-            ${ic('edit', 18)}</button>`).join('')}</div>` : `<div class="card small muted">مفيش مجموعات للصف ده</div>`}</section>`;
-    }).join('')}
-    <button class="btn accent lg" data-act="editGroup">${ic('plus', 20)} مجموعة جديدة</button>
-  </main>`;
-};
+/* قائمة المجموعات وصفحة المجموعة في views-groups.js */
 ACT.editGroup = el => {
   const st = App.st;
   const g = el.dataset.g ? E.groupById(st, el.dataset.g) : null;
@@ -353,6 +338,6 @@ ACT.editGroup = el => {
   if (g) $('#gf-del', s.el).onclick = async () => {
     if (used) return toast('مينفعش تحذف مجموعة فيها طلاب — انقلهم لمجموعة تانية الأول', { type: 'err', sound: 'err', ms: 4500 });
     s.close();
-    if (await confirmBox({ title: 'حذف المجموعة؟', ok: 'حذف', danger: true, icon: 'trash' })) commit(st => { st.groups = st.groups.filter(x => x.id !== g.id); }, 'المجموعة اتحذفت', { type: 'warn' });
+    if (await confirmBox({ title: 'حذف المجموعة؟', ok: 'حذف', danger: true, icon: 'trash' })) { commit(st => { st.groups = st.groups.filter(x => x.id !== g.id); }, 'المجموعة اتحذفت', { type: 'warn' }); if (route().name === 'group') go('groups'); }
   };
 };

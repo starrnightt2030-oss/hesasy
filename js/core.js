@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.5.0'
+  version: '1.6.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -267,7 +267,7 @@ const TABS = [
   { r: 'dues', label: 'التحصيل', icon: 'wallet' },
   { r: 'project', label: 'المشروع', icon: 'box' }
 ];
-const TAB_OF = { student: 'students', 'student-new': 'students', 'student-edit': 'students', session: 'schedule', groups: 'schedule' };
+const TAB_OF = { student: 'students', 'student-new': 'students', 'student-edit': 'students', session: 'schedule', groups: 'schedule', group: 'schedule' };
 function route() {
   const h = decodeURIComponent(location.hash.replace(/^#\/?/, '')) || 'home';
   const i = h.indexOf('/');

@@ -191,6 +191,7 @@ Views.reports = () => {
     ['group', 'كشف حساب مجموعة', 'كل طالب: المستحق والمدفوع والمتبقي', 'users', 'blue'],
     ['collection', 'التحصيل الشهري', 'إجمالي كل مجموعة وكل صف في الشهر', 'wallet', 'green'],
     ['late', 'كشف المستحقات', 'كل اللي عليهم فلوس: متأخرين، خلصوا الشهر، الحصة التالتة', 'alert', 'red'],
+    ['groupMonth', 'ملخص شهر المجموعة', 'بعد كل ٤ حصص: حضور وغياب كل طالب في المجموعة', 'users', 'amber'],
     ['attendance', 'كشف الغياب', 'حضور وغياب كل حصة للمجموعة في الشهر', 'check', 'amber'],
     ['schedule', 'الجدول الأسبوعي', 'جدول الحصص جاهز للطباعة والتعليق', 'cal', 'blue'],
     ['term', 'تقرير الترم / السنة', 'المستحق والمحصل شهر بشهر', 'chart', 'green'],
@@ -225,7 +226,7 @@ ACT.repMode = el => { App.ui.repMode = el.dataset.m; render(); };
 /* ---------- اختيار معايير التقرير ---------- */
 ACT.report = async el => {
   const r = el.dataset.r, st = App.st;
-  if (!['schedule', 'attendance', 'students', 'projAtt', 'projQ'].includes(r) && !(await needReveal())) return;
+  if (!['schedule', 'attendance', 'groupMonth', 'students', 'projAtt', 'projQ'].includes(r) && !(await needReveal())) return;
   const groupSel = (sel) => `<label class="field">المجموعة<select class="input select" id="rp-g">${st.groups.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(E.SUBJ[g.subjectId].name + ' · ' + E.groupLabel(st, g))}</option>`).join('')}</select></label>`;
   const monthSel = `<label class="field">الشهر<input class="input" type="month" id="rp-m" value="${E.today().slice(0, 7)}"></label>`;
   const termOpts = [...(st.settings.terms || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`), '<option value="year">السنة كاملة</option>', '<option value="month">شهر</option>'].join('');
@@ -233,6 +234,7 @@ ACT.report = async el => {
   if (r === 'group') { title = 'كشف حساب مجموعة'; body = groupSel(el.dataset.g) + `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts}</select></label>` + monthSel; }
   else if (r === 'collection') { title = 'التحصيل الشهري'; body = monthSel; }
   else if (r === 'attendance') { title = 'كشف الغياب'; body = groupSel() + monthSel; }
+  else if (r === 'groupMonth') { title = 'ملخص شهر المجموعة'; body = groupSel() + `<label class="field">الشهر (كل ٤ حصص)<select class="input select" id="rp-n"></select></label>`; }
   else if (r === 'term') { title = 'تقرير الترم / السنة'; body = `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts.replace('<option value="month">شهر</option>', '')}</select></label>`; }
   else if (r === 'project') { title = 'مستلزمات المشروع'; body = `<label class="field">البند<select class="input select" id="rp-i"><option value="">كل البنود</option>${st.projectItems.map(it => `<option value="${it.id}" ${it.id === el.dataset.i ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></label>`; }
   else if (r === 'student') { title = 'كشف حساب طالب'; body = `<label class="field">الطالب<select class="input select" id="rp-s">${st.students.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>`; }
@@ -244,14 +246,19 @@ ACT.report = async el => {
     if (r === 'projQ' && el.dataset.q) body += `<input type="hidden" id="rp-q" value="${el.dataset.q}">`;
   }
   else if (r === 'students') { title = 'قائمة الطلاب'; body = `<label class="field">الصف<select class="input select" id="rp-gr"><option value="0">كل الصفوف</option><option value="1">الصف الأول</option><option value="2">الصف الثاني</option><option value="3">الصف الثالث</option></select></label>`; }
-  if (['group', 'attendance'].includes(r) && !st.groups.length) return toast('مفيش مجموعات لسه', { type: 'warn' });
+  if (['group', 'attendance', 'groupMonth'].includes(r) && !st.groups.length) return toast('مفيش مجموعات لسه', { type: 'warn' });
   if (r === 'student' && !st.students.length) return toast('مفيش طلاب لسه', { type: 'warn' });
   if (!body) return Print[r]({});
   const s = sheet(`<h2>${title}</h2>${body}<button class="btn lg" id="rp-ok">${ic('eye', 20)} عرض التقرير</button>`);
   const mEl = $('#rp-m', s.el), pEl = $('#rp-p', s.el);
   if (mEl && pEl) { const sync = () => { mEl.closest('label').hidden = pEl.value !== 'month'; }; pEl.onchange = sync; sync(); }
+  const nEl = $('#rp-n', s.el), gEl = $('#rp-g', s.el);
+  if (nEl && gEl) {
+    const fillN = () => { const cs = E.groupCycles(st, gEl.value, E.today(), nowHM()); nEl.innerHTML = cs.length ? cs.map(c => `<option value="${c.n}" ${c === cs[cs.length - 1] ? 'selected' : ''}>الشهر ${c.n} · ${E.fmtShort(c.from)} ← ${E.fmtShort(c.to)}${c.complete ? ' ✓' : ' (شغال)'}</option>`).join('') : '<option value="">لسه مفيش حصص</option>'; };
+    gEl.onchange = fillN; fillN();
+  }
   $('#rp-ok', s.el).onclick = () => {
-    const o = {}; [['g', 'rp-g'], ['m', 'rp-m'], ['p', 'rp-p'], ['i', 'rp-i'], ['s', 'rp-s'], ['gr', 'rp-gr'], ['q', 'rp-q']].forEach(([k, id]) => { const x = $('#' + id, s.el); if (x) o[k] = x.value; });
+    const o = {}; [['g', 'rp-g'], ['n', 'rp-n'], ['m', 'rp-m'], ['p', 'rp-p'], ['i', 'rp-i'], ['s', 'rp-s'], ['gr', 'rp-gr'], ['q', 'rp-q']].forEach(([k, id]) => { const x = $('#' + id, s.el); if (x) o[k] = x.value; });
     s.close(); Print[r](o);
   };
 };

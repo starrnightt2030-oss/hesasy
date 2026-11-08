@@ -389,3 +389,9 @@ textarea.input { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .adate.a { background: var(--red-soft); color: var(--red); }
 .adate.o { background: #EEF0F4; color: var(--muted-2); }
 .adate.f { border: 1.5px dashed var(--field); color: var(--muted); }
+
+/* ---------- صفحة المجموعة: ملخص الشهر والنقل ---------- */
+.ad.x { background: transparent; border: 1.5px solid var(--line); color: var(--muted); }
+.box-ck { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--field); display: inline-flex; align-items: center; justify-content: center; color: transparent; flex-shrink: 0; background: #fff; }
+.box-ck.on { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+.box-ck.dis { background: var(--line-2); border-color: var(--line); }

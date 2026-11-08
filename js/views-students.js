@@ -113,6 +113,7 @@ Views.student = id => {
         return `<div style="padding:12px 0;display:flex;flex-direction:column;gap:8px;${e.endDate ? 'opacity:.7' : ''}">
           <div class="row between" style="align-items:flex-start"><div class="stack"><span class="b">${esc(E.SUBJ[e.subjectId].name)}</span>
             <span class="small muted">${esc(E.groupLabel(st, E.groupById(st, gid)))}${lastC && lastC.bundle ? ' · نصيبها من العرض ' + money(lastC.price) : lastC ? ' · ' + money(lastC.price) : ''}</span></div>${chip}</div>
+          ${!e.endDate && st.groups.some(x => x.subjectId === e.subjectId && x.id !== gid) ? `<button class="btn sm soft" data-act="moveEnr" data-s="${s.id}" data-e="${e.id}" style="align-self:flex-start">${ic('users', 16)} نقل لمجموعة تانية</button>` : ''}
           ${!e.endDate && !notYet ? `<div class="row" style="gap:10px"><div class="cycle-dots">${[1, 2, 3, 4].map(i => `<span class="${i <= pos.pos ? 'on' : ''}"></span>`).join('')}</div><span class="small muted">الدورة ${pos.cycle} · حصة ${pos.pos} من 4</span></div>` : ''}
         </div>`;
       }).join('') : '<div class="sm muted" style="padding:14px 0">مفيش مواد</div>'}</div>

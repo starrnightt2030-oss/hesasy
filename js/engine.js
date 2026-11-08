@@ -413,6 +413,118 @@
     }).filter(x => x.inIt || x.res);
   }
 
+  /* ---------- شهور المجموعة (كل ٤ حصص محسوبة = شهر) ----------
+   * الشهر بيبدأ من أول حصة لأول طالب في المجموعة، والحصص الملغية والمؤجلة مش بتتحسب */
+  function groupAnchor(st, gid) {
+    let a = null;
+    for (const s of st.students) for (const e of s.enrollments) {
+      const h = (e.groupHist || []).slice().sort((x, y) => x.from.localeCompare(y.from));
+      h.forEach((x, i) => {
+        if (x.groupId !== gid) return;
+        const f = i === 0 || x.from < e.startDate ? e.startDate : x.from;
+        if (e.endDate && f > e.endDate) return;
+        if (!a || f < a) a = f;
+      });
+    }
+    return a;
+  }
+  /* nowT (اختياري "HH:MM") علشان الحصة اللي النهارده متتحسبش خلصت قبل معادها */
+  function groupCycles(st, gid, asOf, nowT) {
+    asOf = asOf || today();
+    const a = groupAnchor(st, gid);
+    if (!a) return [];
+    const all = occurrences(st, gid, a, addDays(asOf, 70)).filter(o => o.status === 'normal');
+    const done = o => o.date < asOf || (o.date === asOf && (!nowT || o.time <= nowT));
+    const out = [];
+    for (let i = 0; i < all.length; i += 4) {
+      const ses = all.slice(i, i + 4);
+      if (ses[0].date > asOf) break;
+      const last = ses[ses.length - 1];
+      out.push({ n: i / 4 + 1, sessions: ses, from: ses[0].date, to: last.date, held: ses.filter(done).length, complete: ses.length === 4 && done(last) });
+    }
+    return out;
+  }
+  /* اشتراك الطالب اللي كان في المجموعة يوم الحصة */
+  const enrollmentInGroup = (s, gid, d) => s.enrollments.find(e => groupOfEnrollment(e, d) === gid && isEnrollmentActive(e, d)) || null;
+
+  /* ملخص شهر المجموعة: كل طالب وحضوره وغيابه في الـ٤ حصص، وعدد حصصه الكلي */
+  function groupCycleSummary(st, gid, cyc, asOf, nowT) {
+    asOf = asOf || today();
+    const g = groupById(st, gid);
+    const done = o => o.date < asOf || (o.date === asOf && (!nowT || o.time <= nowT));
+    const members = new Map();
+    cyc.sessions.forEach(o => studentsInSession(st, o).forEach(x => { if (!members.has(x.student.id)) members.set(x.student.id, x); }));
+    const rows = [...members.values()].map(({ student: s, enrollment: e0 }) => {
+      const items = cyc.sessions.map(o => {
+        const e = enrollmentInGroup(s, gid, o.date);
+        const v = (st.attendance[o.key] || {})[s.id];
+        const mark = !e ? 'out' : !done(o) ? 'future' : v === 'p' ? 'p' : v === 'a' ? 'a' : 'none';
+        return { key: o.key, date: o.date, time: o.time, type: o.type, mark };
+      });
+      const e = cyc.sessions.map(o => enrollmentInGroup(s, gid, o.date)).filter(Boolean).pop() || e0;
+      const ref = cyc.to < asOf ? cyc.to : asOf;
+      const pos = cyclePosition(st, e, ref);
+      let tp = 0, ta = 0;
+      enrollmentSessions(st, e, asOf).forEach(o => { const v = (st.attendance[o.key] || {})[s.id]; if (v === 'p') tp++; else if (v === 'a') ta++; });
+      // نقل من / لمجموعة تانية جوه الشهر ده
+      const hist = (e.groupHist || []).slice().sort((x, y) => x.from.localeCompare(y.from));
+      const moves = [];
+      hist.forEach((h, i) => {
+        if (i === 0) return;
+        if (h.from < cyc.from || h.from > addDays(cyc.to, 0)) return;
+        const prev = hist[i - 1].groupId;
+        if (h.groupId === gid && prev !== gid) moves.push({ kind: 'in', date: h.from, other: prev });
+        else if (prev === gid && h.groupId !== gid) moves.push({ kind: 'out', date: h.from, other: h.groupId });
+      });
+      if (e.endDate && e.endDate >= cyc.from && e.endDate <= cyc.to) moves.push({ kind: 'left', date: e.endDate });
+      return {
+        student: s, enrollment: e, items, moves,
+        pres: items.filter(x => x.mark === 'p').length, abs: items.filter(x => x.mark === 'a').length,
+        none: items.filter(x => x.mark === 'none').length, total: pos.n, pos, allPres: tp, allAbs: ta,
+        stillHere: !!enrollmentInGroup(s, gid, cyc.to)
+      };
+    }).sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
+    const P = rows.reduce((t, r) => t + r.pres, 0), A = rows.reduce((t, r) => t + r.abs, 0);
+    return { group: g, cycle: cyc, rows, pres: P, abs: A, rate: P + A ? Math.round(P / (P + A) * 100) : null, unrecorded: rows.reduce((t, r) => t + r.none, 0) };
+  }
+
+  /* ---------- نقل طالب من مجموعة لمجموعة تانية لنفس المادة ----------
+   * الحضور والغياب متخزنين بالحصة، وعدد الحصص بيتحسب على كل المجموعات اللي الطالب كان فيها،
+   * فالنقل بيضيف بس سطر في groupHist: من التاريخ ده الطالب في المجموعة الجديدة. */
+  function transferPreview(st, s, e, toGid, from) {
+    const start = from < e.startDate ? e.startDate : from;
+    const oldGid = groupOfEnrollment(e, start);
+    const lost = [];
+    // حصص في المجموعة القديمة من تاريخ النقل ومتسجل فيها غياب الطالب ده → مش هتتحسب بعد النقل
+    const hist = (e.groupHist || []).slice().sort((x, y) => x.from.localeCompare(y.from));
+    hist.forEach((h, i) => {
+      if (h.groupId === toGid) return;
+      const hFrom = i === 0 || h.from < e.startDate ? e.startDate : h.from;
+      const hTo = i < hist.length - 1 ? addDays(hist[i + 1].from, -1) : (e.endDate || '9999-12-31');
+      const a = hFrom > start ? hFrom : start;
+      const b = hTo < today() ? hTo : today();
+      if (a > b) return;
+      occurrences(st, h.groupId, a, b).forEach(o => { const v = (st.attendance[o.key] || {})[s.id]; if (o.status === 'normal' && v) lost.push({ o, v }); });
+    });
+    const before = enrollmentSessions(st, e, addDays(start, -1));
+    return { start, oldGid, lost, counted: before.length, pos: before.length ? ((before.length - 1) % 4) + 1 : 0, cycle: Math.max(1, Math.ceil(before.length / 4)) };
+  }
+  function transferEnrollment(st, studentId, enrollmentId, toGid, from) {
+    const s = st.students.find(x => x.id === studentId);
+    const e = s && s.enrollments.find(x => x.id === enrollmentId);
+    const g = groupById(st, toGid);
+    if (!e || !g) throw new Error('بيانات النقل ناقصة');
+    if (g.subjectId !== e.subjectId) throw new Error('لازم المجموعة الجديدة تكون لنفس المادة');
+    const start = from < e.startDate ? e.startDate : from;
+    const hist = (e.groupHist || []).slice().sort((x, y) => x.from.localeCompare(y.from)).filter(h => h.from < start);
+    if (!hist.length || start <= e.startDate) e.groupHist = [{ from: e.startDate, groupId: toGid }];
+    else {
+      if (hist[hist.length - 1].groupId !== toGid) hist.push({ from: start, groupId: toGid });
+      e.groupHist = hist;
+    }
+    return e;
+  }
+
   /* ---------- تذكيرات التحصيل ----------
    * third: وصل الحصة التالتة في الشهر ولسه مدفعش · ended: خلص الـ٤ حصص ولسه مدفعش */
   function dueAlerts(st, C) {
@@ -467,7 +579,8 @@
     defaultState, uid, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
-    PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts
+    PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
+    groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;
 })(typeof window !== 'undefined' ? window : globalThis);
