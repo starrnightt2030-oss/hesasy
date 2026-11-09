@@ -67,7 +67,7 @@
         holidays: [],
         reminders: { before: 30, daily: true, overdue: true, sound: true },
         privacy: { hide: true },
-        backup: { lastAuto: null, lastFolder: null, lastDownload: null }
+        backup: { lastAuto: null, lastFolder: null, lastDownload: null, daily: true, time: '21:00', lastCloud: null, driveClient: '', driveFolder: '', driveEmail: '' }
       },
       groups: [],
       students: [],

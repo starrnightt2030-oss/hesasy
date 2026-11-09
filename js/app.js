@@ -155,7 +155,7 @@ function unlock(silent) {
   if (!silent) Sound.play('ok');
   render();
   setTimeout(dailyChecks, 500);
-  if (!started) { started = true; setTimeout(dailyBackup, 1500); setInterval(checkReminders, 20000); }
+  if (!started) { started = true; setTimeout(dailyBackup, 1500); setInterval(checkReminders, 20000); setInterval(checkCloudBackup, 20000); setTimeout(checkCloudBackup, 4000); Drive.warm(); }
   checkReminders();
 }
 
@@ -226,10 +226,66 @@ async function dailyBackup() {
         else if (!asked) { localStorage.setItem('hesasy-bk-ask', t); toast('احفظ نسخة اليوم في فولدر الموبايل', { type: 'warn', icon: 'folder', action: 'احفظ', ms: 10000, onAction: () => ACT.folderNow() }); }
       } catch (e) {}
     } else if (!info && !asked) { localStorage.setItem('hesasy-bk-ask', t); toast('اختار فولدر على الموبايل للنسخ اليومي', { type: 'warn', icon: 'folder', action: 'اختار', ms: 10000, onAction: () => ACT.pickFolder() }); }
-  } else if (B.lastDownload !== t && !asked) {
+  } else if (B.lastDownload !== t && !asked && !B.daily) {
     localStorage.setItem('hesasy-bk-ask', t);
     toast('احفظ نسخة اليوم على الموبايل', { type: 'warn', icon: 'download', action: 'حفظ', ms: 10000, onAction: () => ACT.dlBackup() });
   }
+}
+
+/* ---------- نسخة يومية على Google Drive أو واتساب في معاد ثابت ----------
+ * لو الدرايف مربوط والدخول لسه صالح: الرفع بيحصل لوحده أول ما المعاد ييجي والتطبيق مفتوح.
+ * غير كده: تنبيه بزرار واحد (ارفع / ابعت). التطبيق مقفول خالص؟ أول ما تفتحه بعد المعاد. */
+let cloudBusy = false;
+async function cloudBackupNow(silent) {
+  const st = App.st, B = st.settings.backup;
+  if (cloudBusy) return false;
+  cloudBusy = true;
+  try {
+    if (Drive.configured()) {
+      if (!Drive.hasToken()) { if (silent) return false; await Drive.signIn(); }
+      await Drive.upload(st, silent ? 'تلقائي يومي' : 'يدوي');
+      B.lastCloud = E.today(); B.lastCloudAt = new Date().toISOString(); Store.save(st);
+      toast('اتحفظت نسخة على Google Drive' + (silent ? ' (تلقائي)' : ''), { sound: 'ok' });
+      if (route().name === 'settings' || route().name === 'drive') render();
+      return true;
+    }
+    if (silent) return false;
+    App.picking = true;
+    let ok = false;
+    try { ok = await Backup.share(st); } finally { setTimeout(() => { App.picking = false; }, 1500); }
+    if (ok) { B.lastCloud = E.today(); B.lastCloudAt = new Date().toISOString(); Store.save(st); toast('النسخة اتبعتت'); if (route().name === 'settings') render(); return true; }
+    Backup.download(st); B.lastDownload = E.today(); Store.save(st);
+    toast('المشاركة مش مدعومة هنا — النسخة نزلت في Downloads، ارفعها على الدرايف', { type: 'warn', ms: 6000 });
+    return false;
+  } catch (e) {
+    if (e && e.name === 'AbortError') return false;          // قفل نافذة المشاركة
+    if (silent && e && e.auth) return false;
+    toast(esc((e && e.message) || 'مقدرش يرفع النسخة'), { type: 'err', sound: 'err', ms: 6000 });
+    return false;
+  } finally { cloudBusy = false; }
+}
+window.cloudBackupNow = cloudBackupNow;
+function cloudDue() {
+  const st = App.st, B = st.settings.backup;
+  return !!B.daily && !!(st.students.length || st.groups.length) && B.lastCloud !== E.today() && nowHM() >= (B.time || '21:00');
+}
+async function checkCloudBackup() {
+  if (!App.unlocked || !App.st || App.picking || !cloudDue()) return;
+  if (await cloudBackupNow(true)) return;
+  const drive = Drive.configured(), t = E.today();
+  if (document.hidden) {
+    if (localStorage.getItem('hesasy-cloud-notif') !== t) {
+      localStorage.setItem('hesasy-cloud-notif', t);
+      sysNotify('معاد نسخة حصصي اليومية', drive ? 'افتح التطبيق واضغط "ارفع" علشان النسخة تتحفظ على Google Drive' : 'افتح التطبيق وابعت نسخة اليوم للدرايف أو واتساب', location.pathname + '#/home', 'hesasy-cloud');
+    }
+    return;
+  }
+  const last = +localStorage.getItem('hesasy-cloud-ask') || 0;
+  if (Date.now() - last < 2 * 3600e3 || $('.overlay')) return;
+  localStorage.setItem('hesasy-cloud-ask', String(Date.now()));
+  Sound.play('chime');
+  toast(drive ? 'معاد نسخة اليوم — ارفعها على Google Drive' : 'معاد نسخة اليوم — ابعتها للدرايف أو واتساب',
+    { type: 'warn', icon: drive ? 'upload' : 'share', action: drive ? 'ارفع' : 'ابعت', ms: 20000, onAction: () => cloudBackupNow(false) });
 }
 
 /* ---------- القفل التلقائي ----------
@@ -257,7 +313,7 @@ document.addEventListener('visibilitychange', () => {
     if (App.unlocked && !(App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS)) sessSet({ hidden: 0, active: lastActive });
     if (App.picking) return;
     if (App.unlocked && App.sec && App.sec.lock && App.sec.pin && away > BG_LOCK_MS) lockApp();
-    else if (App.unlocked && !$('.overlay')) { recompute(); render(); checkReminders(); }
+    else if (App.unlocked && !$('.overlay')) { recompute(); render(); checkReminders(); setTimeout(checkCloudBackup, 1200); }
   }
 });
 window.addEventListener('pagehide', () => Store.flush());

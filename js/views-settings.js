@@ -77,7 +77,22 @@ Views.settings = () => {
             <div class="grid2"><button class="btn sm" data-act="folderNow">${ic('refresh', 16)} انسخ دلوقتي</button><button class="btn sm ghost" data-act="pickFolder">تغيير الفولدر</button></div>` :
             `<button class="btn" data-act="pickFolder">${ic('folder', 18)} اختار فولدر للنسخ اليومي</button>`}</div>` :
           `<div class="banner amber">${ic('info', 18)}<span>المتصفح ده مش بيسمح للتطبيق يكتب في فولدر لوحده. علشان كده كل يوم هيظهرلك زرار <b>"حفظ نسخة اليوم"</b> بضغطة واحدة بتنزل الملف في Downloads.</span></div>`}
-        <div class="grid2"><button class="btn sm ghost" data-act="dlBackup">${ic('download', 16)} تنزيل نسخة</button><button class="btn sm ghost" data-act="shareBackup">${ic('share', 16)} مشاركة (درايف/واتساب)</button></div>
+        <div class="stack" style="gap:10px;border-top:1px solid var(--line-2);padding-top:14px">
+          <span class="b">نسخة على Google Drive أو واتساب</span>
+          <button class="btn" data-act="shareBackup">${ic('share', 18)} ابعت نسخة دلوقتي (Drive / واتساب)</button>
+          <div class="row between" style="gap:10px"><span class="stack"><span class="b sm">نسخة يومية في معاد ثابت</span><span class="small muted">${S.backup.daily ? (Drive.configured() ? 'بيترفع على الدرايف في المعاد ده كل يوم' : 'هيفكّرك بزرار "ابعت" في المعاد ده كل يوم') : 'مقفول'}</span></span>
+            <span class="row" style="gap:8px">${S.backup.daily ? `<input class="input sm" type="time" value="${esc(S.backup.time || '21:00')}" data-change="setCloudTime" style="width:132px;text-align:center;font-weight:700" aria-label="معاد النسخة اليومية">` : ''}<button class="switch" role="switch" aria-checked="${!!S.backup.daily}" aria-label="نسخة يومية في معاد ثابت" data-act="tCloud"></button></span></div>
+          <div class="small muted">آخر نسخة اتبعتت أو اترفعت: <b>${S.backup.lastCloudAt ? E.fmtDate(S.backup.lastCloudAt.slice(0, 10)) + ' · ' + new Date(S.backup.lastCloudAt).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' }) : 'لسه'}</b></div>
+          ${Drive.configured() ? `<div class="stack" style="gap:8px;background:var(--ground);border-radius:14px;padding:12px">
+              <div class="row between"><span class="row" style="gap:8px">${ic('upload', 18)}<span class="stack"><span class="b sm">Google Drive مربوط</span><span class="small muted ellipsis" style="max-width:190px;direction:ltr;text-align:right">${esc(S.backup.driveEmail || 'فولدر: ' + Drive.FOLDER)}</span></span></span>
+                <span class="chip ${Drive.hasToken() ? 'green' : 'amber'}">${Drive.hasToken() ? 'متصل' : 'محتاج دخول'}</span></div>
+              <div class="grid2"><button class="btn sm" data-act="driveNow">${ic('upload', 16)} ارفع دلوقتي</button><a class="btn sm ghost" href="#/drive">${ic('layers', 16)} النسخ على الدرايف</a></div>
+              <div class="small muted">الدخول على جوجل بيفضل صالح ساعة. لو المعاد جه وهو صالح، النسخة بتترفع لوحدها؛ غير كده هيظهرلك زرار "ارفع" بضغطة واحدة.</div>
+              <button class="btn sm soft" data-act="driveOff" style="align-self:flex-start">إلغاء ربط الدرايف</button></div>`
+            : `<button class="btn soft" data-act="driveSetup">${ic('plug', 18)} ربط Google Drive مباشرة (اختياري)</button>
+              <div class="small muted">من غير ربط: زرار "ابعت" بيفتح قايمة المشاركة وتختار منها Drive أو واتساب. الربط بيخلّي التطبيق يرفع بنفسه في فولدر "${Drive.FOLDER}" وتسترجع من جوه التطبيق.</div>`}
+        </div>
+        <button class="btn sm ghost" data-act="dlBackup">${ic('download', 16)} تنزيل نسخة على الموبايل</button>
         <a class="btn sm soft" href="#/backups">${ic('layers', 16)} النسخ المحفوظة واسترجاعها</a>
         <div class="banner red">${ic('alert', 18)}<span><b>مهم:</b> "مسح بيانات المتصفح" أو مسح بيانات Chrome بيمسح كل حاجة جوه التطبيق، ومعاها النسخ الداخلية. النسخة الوحيدة اللي بتفضل هي الملف اللي نزّلته على الموبايل — احتفظ بيه، ويفضّل تبعته لنفسك على واتساب أو Drive.</span></div>
       </div></section>
@@ -184,7 +199,89 @@ ACT.folderNow = async () => {
   catch (e) { toast('حصلت مشكلة: ' + e.message, { type: 'err' }); }
 };
 ACT.dlBackup = () => { Backup.download(App.st); commit(st => { st.settings.backup.lastDownload = E.today(); }, 'النسخة نزلت في Downloads', { noRender: true }); };
-ACT.shareBackup = async () => { try { if (!(await Backup.share(App.st))) { Backup.download(App.st); toast('المشاركة مش مدعومة — النسخة نزلت بدلها'); } } catch (e) {} };
+ACT.shareBackup = async () => {
+  App.picking = true;
+  try {
+    if (await Backup.share(App.st)) { commit(st => { st.settings.backup.lastCloud = E.today(); st.settings.backup.lastCloudAt = new Date().toISOString(); }, 'النسخة اتبعتت', { sound: false }); }
+    else { Backup.download(App.st); toast('المشاركة مش مدعومة — النسخة نزلت في Downloads بدلها'); }
+  } catch (e) {} finally { setTimeout(() => { App.picking = false; }, 1500); }
+};
+ACT.tCloud = () => commit(st => { st.settings.backup.daily = !st.settings.backup.daily; }, App.st.settings.backup.daily ? 'النسخة اليومية اتقفلت' : 'النسخة اليومية اتفعلت');
+ACT.setCloudTime = el => { if (!/^\d\d:\d\d$/.test(el.value)) return; localStorage.removeItem('hesasy-cloud-ask'); commit(st => { st.settings.backup.time = el.value; }, 'معاد النسخة اليومية بقى ' + E.fmtTime(el.value)); };
+ACT.driveNow = () => cloudBackupNow(false);
+ACT.driveOff = async () => {
+  if (!(await confirmBox({ title: 'إلغاء ربط Google Drive؟', text: 'النسخ اللي اترفعت قبل كده بتفضل في الدرايف في فولدر "' + esc(Drive.FOLDER) + '". تقدر تربط تاني في أي وقت.', ok: 'إلغاء الربط', cancel: 'رجوع', icon: 'plug' }))) return;
+  Drive.disconnect();
+  commit(st => { Object.assign(st.settings.backup, { driveClient: '', driveFolder: '', driveEmail: '' }); }, 'اتلغى ربط الدرايف', { type: 'warn' });
+};
+/* خطوات الربط: Client ID من Google Cloud مرة واحدة */
+ACT.driveSetup = () => {
+  const origin = location.origin;
+  const steps = [
+    ['افتح Google Cloud', 'من الموبايل أو الكمبيوتر افتح <b dir="ltr">console.cloud.google.com</b> بحساب جوجل اللي هتحفظ عليه، واعمل مشروع جديد (اسمه مثلًا hesasy).'],
+    ['فعّل Google Drive API', 'من القايمة: <b dir="ltr">APIs &amp; Services ← Library</b>، دوّر على <b dir="ltr">Google Drive API</b> واضغط <b dir="ltr">Enable</b>.'],
+    ['شاشة الموافقة', 'من <b dir="ltr">Google Auth Platform</b> (أو OAuth consent screen): اكتب اسم التطبيق وإيميلك، واختار <b dir="ltr">External</b>. في <b dir="ltr">Audience ← Test users</b> ضيف إيميلك.'],
+    ['اعمل Client ID', 'من <b dir="ltr">Clients</b> (أو Credentials ← Create credentials ← OAuth client ID): النوع <b dir="ltr">Web application</b>، وفي <b dir="ltr">Authorized JavaScript origins</b> حط الرابط اللي تحت بالظبط، وبعدين <b dir="ltr">Create</b>.'],
+    ['انسخ الـ Client ID', 'هيطلعلك كود آخره <b dir="ltr">.apps.googleusercontent.com</b> — انسخه وحطه هنا تحت.']
+  ];
+  const s = sheet(`<h2>ربط Google Drive</h2>
+    <div class="small muted" style="margin-top:-8px;line-height:1.8">مرة واحدة بس (حوالي ٥ دقايق). التطبيق هياخد صلاحية على الملفات اللي هو بيعملها بس، مش على باقي الدرايف.</div>
+    <ol class="stack" style="gap:10px;margin:0;padding-inline-start:20px">${steps.map(([h, t]) => `<li class="sm" style="line-height:1.8"><b>${h}:</b> ${t}</li>`).join('')}</ol>
+    <div class="row between" style="background:var(--ground);border-radius:12px;padding:10px 12px;gap:8px"><code dir="ltr" class="sm b" style="word-break:break-all">${esc(origin)}</code><button class="btn sm ghost" id="dv-cp">نسخ</button></div>
+    <label class="field">Client ID<input class="input" id="dv-id" dir="ltr" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off" spellcheck="false" value="${esc(App.st.settings.backup.driveClient || '')}"></label>
+    <div id="dv-e" style="color:var(--red);font-weight:600;font-size:14px;min-height:20px"></div>
+    <div class="grid2"><button class="btn ghost" data-close>رجوع</button><button class="btn" id="dv-ok">${ic('plug', 18)} ربط وتجربة</button></div>`);
+  $('#dv-cp', s.el).onclick = async () => { try { await navigator.clipboard.writeText(origin); toast('الرابط اتنسخ'); } catch (e) {} };
+  $('#dv-ok', s.el).onclick = async () => {
+    const id = $('#dv-id', s.el).value.trim(), err = $('#dv-e', s.el);
+    if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(id)) { err.textContent = 'الكود لازم يكون آخره .apps.googleusercontent.com'; Sound.play('err'); return; }
+    const B = App.st.settings.backup, prev = B.driveClient;
+    B.driveClient = id; err.textContent = '';
+    $('#dv-ok', s.el).disabled = true; $('#dv-ok', s.el).textContent = 'بيفتح جوجل…';
+    try {
+      await Drive.signIn(true);
+      await Drive.whoAmI();
+      await Drive.folderId();
+      Store.save(App.st);
+      s.close();
+      toast('Google Drive اتربط ✓ — بنرفع أول نسخة', { ms: 3000 });
+      await cloudBackupNow(false);
+      render();
+    } catch (e) {
+      B.driveClient = prev;
+      err.textContent = (e && e.message) || 'الربط مكملش';
+      Sound.play('err');
+      const b = $('#dv-ok', s.el); if (b) { b.disabled = false; b.innerHTML = ic('plug', 18) + ' ربط وتجربة'; }
+    }
+  };
+};
+
+/* ---------- النسخ اللي على Google Drive ---------- */
+Views.drive = () => `
+  <header class="plain-head">${backBtn('#/settings')}<h1>النسخ على Google Drive</h1></header>
+  <main class="pad">
+    <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي في فولدر "<b>${esc(Drive.FOLDER)}</b>" على الدرايف (بيتحفظ آخر ${Drive.KEEP}). الاسترجاع محتاج باسورد الأدمن، وقبله بتشوف عدد الطلاب والدفعات اللي في النسخة.</span></div>
+    ${!Drive.configured() ? `<div class="banner amber">${ic('alert', 18)}<span>الدرايف مش مربوط. اربطه من الإعدادات، أو استرجع من "النسخ المحفوظة ← استرجاع من ملف" واختار Drive من القايمة.</span></div>` :
+      `<div id="dv-list" class="card tight">${Drive.hasToken() ? '<div class="sm muted" style="padding:14px 0">بيحمّل…</div>' : `<div class="empty"><span class="ic">${ic('lock', 26)}</span><h3>محتاج تدخل على جوجل</h3><span class="sm">علشان نجيب قايمة النسخ من الدرايف</span></div>`}</div>
+      ${Drive.hasToken() ? '' : `<button class="btn" data-act="driveLogin">${ic('key', 18)} دخول على جوجل</button>`}
+      <button class="btn accent" data-act="driveNow">${ic('upload', 18)} ارفع نسخة دلوقتي</button>`}
+  </main>`;
+Views.drive_after = async () => {
+  const el = $('#dv-list');
+  if (!el || !Drive.configured() || !Drive.hasToken()) return;
+  try {
+    const list = await Drive.list();
+    if (!$('#dv-list')) return;
+    el.innerHTML = list.length ? list.map(f => { const d = new Date(f.createdTime); return `<div class="list-row"><span class="avatar">${ic('upload', 18)}</span><span class="grow stack"><span class="b">${E.fmtDate(E.iso(d))} · ${d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}</span><span class="small muted" dir="ltr" style="text-align:right">${Math.max(1, Math.round((+f.size || 0) / 1024))} KB</span></span><button class="btn sm ghost" data-act="driveRestore" data-id="${esc(f.id)}">استرجاع</button></div>`; }).join('') : '<div class="sm muted" style="padding:14px 0">مفيش نسخ على الدرايف لسه</div>';
+  } catch (e) { el.innerHTML = `<div class="sm" style="padding:14px 0;color:var(--red)">${esc(e.message || 'مقدرش يجيب النسخ')}</div>`; }
+};
+ACT.driveLogin = async () => { try { await Drive.signIn(); render(); } catch (e) { toast(esc(e.message), { type: 'err', ms: 5000 }); } };
+ACT.driveRestore = async el => {
+  el.disabled = true; el.textContent = 'بيحمّل…';
+  try { const j = await Drive.read(el.dataset.id); await restoreData(j.data, j.at, 'استرجاع من Google Drive'); }
+  catch (e) { toast(esc(e.message || 'مقدرش يحمّل النسخة'), { type: 'err', sound: 'err', ms: 5000 }); }
+  finally { if (el.isConnected) { el.disabled = false; el.textContent = 'استرجاع'; } }
+};
 
 Views.backups = () => `
   <header class="plain-head">${backBtn('#/settings')}<h1>النسخ الاحتياطية</h1></header>
@@ -192,7 +289,9 @@ Views.backups = () => `
     <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي جوه التطبيق (آخر ${Backup.KEEP}). قبل الاسترجاع هتشوف عدد الطلاب والدفعات اللي في النسخة، والاسترجاع محتاج باسورد الأدمن.</span></div>
     <div id="bk-list" class="card tight"><div class="sm muted" style="padding:14px 0">بيحمّل…</div></div>
     <button class="btn" data-act="backupNow">${ic('refresh', 18)} اعمل نسخة دلوقتي</button>
-    <button class="btn accent lg" data-act="restoreFile">${ic('upload', 20)} استرجاع من ملف على الموبايل</button>
+    ${Drive.configured() ? `<a class="btn lg" href="#/drive">${ic('upload', 20)} استرجاع من Google Drive</a>` : ''}
+    <button class="btn accent lg" data-act="restoreFile">${ic('upload', 20)} استرجاع من ملف (الموبايل أو Drive)</button>
+    <div class="small muted" style="padding:0 4px">لو النسخة على الدرايف أو جاتلك على واتساب: اضغط "استرجاع من ملف" واختار <b>Drive</b> من القايمة، أو نزّل الملف من واتساب الأول.</div>
   </main>`;
 Views.backups_after = async () => {
   const list = await Backup.list();

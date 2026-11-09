@@ -107,7 +107,7 @@
   };
 
   const Backup = {
-    KEEP,
+    KEEP, pack, fileName,
     async list() {
       const d = await db();
       const all = await reqP(d.transaction('backups').objectStore('backups').getAll());
