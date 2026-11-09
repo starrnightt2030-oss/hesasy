@@ -167,15 +167,27 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     },
+    /* أندرويد (Chrome) مش بيسمح بمشاركة ملفات .json — فبنبعتها .txt (الاسترجاع بيقرا الاتنين) */
     async share(state) {
-      const f = new File([Backup.blob(state, 'مشاركة')], fileName(), { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'نسخة احتياطية' }); return true; }
-      return false;
+      if (!navigator.share) return false;
+      const data = JSON.stringify(pack(state, 'مشاركة'), null, 1);
+      const json = new File([data], fileName(), { type: 'application/json' });
+      const txt = new File([data], fileName().replace(/\.json$/, '.txt'), { type: 'text/plain' });
+      const can = f => { try { return !navigator.canShare || navigator.canShare({ files: [f] }); } catch (e) { return false; } };
+      const f = can(json) ? json : can(txt) ? txt : null;
+      if (!f) return false;
+      try { await navigator.share({ files: [f], title: 'نسخة احتياطية - حصصي' }); }
+      catch (e) {
+        if (e && e.name === 'AbortError') throw e;          // المستخدم قفل القايمة
+        if (f === json && can(txt)) { await navigator.share({ files: [txt], title: 'نسخة احتياطية - حصصي' }); return true; }
+        throw e;
+      }
+      return true;
     },
     async readFile(file) {
       const txt = (await file.text()).replace(/^\uFEFF/, '').trim();
       let j;
-      try { j = JSON.parse(txt); } catch (e) { throw new Error('الملف ده مش نسخة احتياطية من التطبيق (لازم يكون ملف hesasy-backup….json)'); }
+      try { j = JSON.parse(txt); } catch (e) { throw new Error('الملف ده مش نسخة احتياطية من التطبيق (لازم يكون ملف hesasy-backup… بامتداد .json أو .txt)'); }
       if (j && !j.app && Array.isArray(j.students)) j = { app: 'hesasy', v: 1, at: null, data: j };
       if (!j || j.app !== 'hesasy' || !j.data || !Array.isArray(j.data.students)) throw new Error('الملف ده مش نسخة احتياطية من التطبيق');
       return j;

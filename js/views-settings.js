@@ -203,8 +203,12 @@ ACT.shareBackup = async () => {
   App.picking = true;
   try {
     if (await Backup.share(App.st)) { commit(st => { st.settings.backup.lastCloud = E.today(); st.settings.backup.lastCloudAt = new Date().toISOString(); }, 'النسخة اتبعتت', { sound: false }); }
-    else { Backup.download(App.st); toast('المشاركة مش مدعومة — النسخة نزلت في Downloads بدلها'); }
-  } catch (e) {} finally { setTimeout(() => { App.picking = false; }, 1500); }
+    else { Backup.download(App.st); toast('المتصفح ده مش بيدعم المشاركة — النسخة نزلت في Downloads، ارفعها على الدرايف من هناك', { type: 'warn', ms: 6000 }); }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;               // قفلت قايمة المشاركة
+    Backup.download(App.st);
+    toast('المشاركة مكملتش (' + esc((e && e.name) || 'خطأ') + ') — النسخة نزلت في Downloads بدلها', { type: 'warn', ms: 6000 });
+  } finally { setTimeout(() => { App.picking = false; }, 1500); }
 };
 ACT.tCloud = () => commit(st => { st.settings.backup.daily = !st.settings.backup.daily; }, App.st.settings.backup.daily ? 'النسخة اليومية اتقفلت' : 'النسخة اليومية اتفعلت');
 ACT.setCloudTime = el => { if (!/^\d\d:\d\d$/.test(el.value)) return; localStorage.removeItem('hesasy-cloud-ask'); commit(st => { st.settings.backup.time = el.value; }, 'معاد النسخة اليومية بقى ' + E.fmtTime(el.value)); };
