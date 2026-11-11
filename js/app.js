@@ -356,7 +356,7 @@ function setupUpdates() {
 
 /* ---------- التشغيل ---------- */
 (async function boot() {
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') setupUpdates();
+  if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.IS_NATIVE) setupUpdates();
   Store.persist();
   let saved = null;
   try { saved = await Store.load(); } catch (e) {}

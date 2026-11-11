@@ -1,0 +1,9 @@
+{
+  "appId": "com.hesasy.app",
+  "appName": "حصصي",
+  "webDir": "www",
+  "android": { "allowMixedContent": false, "backgroundColor": "#ECF3FC" },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_hesasy", "iconColor": "#E8962E" }
+  }
+}

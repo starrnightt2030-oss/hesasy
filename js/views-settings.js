@@ -5,7 +5,7 @@ Views.settings = () => {
   const st = App.st, S = st.settings, sec = App.sec || {};
   const P = S.prices, R = S.reminders;
   const folder = App.ui.folderInfo;
-  const notif = 'Notification' in window ? Notification.permission : 'unsupported';
+  const notif = window.IS_NATIVE ? (App.ui.nativeNotif || 'default') : 'Notification' in window ? Notification.permission : 'unsupported';
   const sw = (id, on, label, hint) => `<div class="set-row"><span class="stack"><span class="b">${label}</span>${hint ? `<span class="small muted">${hint}</span>` : ''}</span><button class="switch" role="switch" aria-checked="${!!on}" aria-label="${label}" data-act="${id}"></button></div>`;
   return `
   <header class="plain-head">${backBtn('#/home')}<h1>الإعدادات</h1></header>
@@ -74,7 +74,7 @@ Views.settings = () => {
         ${Backup.folderSupported() ? `<div class="stack" style="gap:8px"><span class="b">فولدر على ذاكرة الموبايل</span>
           ${folder ? `<div class="row between sm" style="background:var(--ground);border-radius:12px;padding:10px 12px"><span class="row" style="gap:8px">${ic('folder', 18)} ${esc(folder.name)}</span><span class="chip ${folder.perm === 'granted' ? 'green' : 'amber'}">${folder.perm === 'granted' ? 'شغال' : 'محتاج إذن'}</span></div>
             <div class="small muted">آخر نسخة في الفولدر: ${S.backup.lastFolder ? E.fmtDate(S.backup.lastFolder) : 'لسه'} · بيحتفظ بآخر ${Backup.KEEP} ملفات</div>
-            <div class="grid2"><button class="btn sm" data-act="folderNow">${ic('refresh', 16)} انسخ دلوقتي</button><button class="btn sm ghost" data-act="pickFolder">تغيير الفولدر</button></div>` :
+            <div class="grid2"><button class="btn sm" data-act="folderNow">${ic('refresh', 16)} انسخ دلوقتي</button>${window.IS_NATIVE ? '' : '<button class="btn sm ghost" data-act="pickFolder">تغيير الفولدر</button>'}</div>` :
             `<button class="btn" data-act="pickFolder">${ic('folder', 18)} اختار فولدر للنسخ اليومي</button>`}</div>` :
           `<div class="banner amber">${ic('info', 18)}<span>المتصفح ده مش بيسمح للتطبيق يكتب في فولدر لوحده. علشان كده كل يوم هيظهرلك زرار <b>"حفظ نسخة اليوم"</b> بضغطة واحدة بتنزل الملف في Downloads.</span></div>`}
         <div class="stack" style="gap:10px;border-top:1px solid var(--line-2);padding-top:14px">
@@ -89,13 +89,13 @@ Views.settings = () => {
               <div class="grid2"><button class="btn sm" data-act="driveNow">${ic('upload', 16)} ارفع دلوقتي</button><a class="btn sm ghost" href="#/drive">${ic('layers', 16)} النسخ على الدرايف</a></div>
               <div class="small muted">الدخول على جوجل بيفضل صالح ساعة. لو المعاد جه وهو صالح، النسخة بتترفع لوحدها؛ غير كده هيظهرلك زرار "ارفع" بضغطة واحدة.</div>
               <button class="btn sm soft" data-act="driveOff" style="align-self:flex-start">إلغاء ربط الدرايف</button></div>`
-            : `<button class="btn soft" data-act="driveSetup">${ic('plug', 18)} ربط Google Drive مباشرة (اختياري)</button>
-              <div class="small muted">من غير ربط: زرار "ابعت" بيفتح قايمة المشاركة وتختار منها Drive أو واتساب. الربط بيخلّي التطبيق يرفع بنفسه في فولدر "${Drive.FOLDER}" وتسترجع من جوه التطبيق.</div>`}
+            : (window.IS_NATIVE ? '' : `<button class="btn soft" data-act="driveSetup">${ic('plug', 18)} ربط Google Drive مباشرة (اختياري)</button>
+              <div class="small muted">من غير ربط: زرار "ابعت" بيفتح قايمة المشاركة وتختار منها Drive أو واتساب. الربط بيخلّي التطبيق يرفع بنفسه في فولدر "${Drive.FOLDER}" وتسترجع من جوه التطبيق.</div>`)}
         </div>
         <button class="btn sm ghost" data-act="dlBackup">${ic('download', 16)} تنزيل نسخة على الموبايل</button>
         <a class="btn sm soft" href="#/attlog">${ic('edit', 16)} سجل تعديلات الغياب</a>
         <a class="btn sm soft" href="#/backups">${ic('layers', 16)} النسخ المحفوظة واسترجاعها</a>
-        <div class="banner red">${ic('alert', 18)}<span><b>مهم:</b> "مسح بيانات المتصفح" أو مسح بيانات Chrome بيمسح كل حاجة جوه التطبيق، ومعاها النسخ الداخلية. النسخة الوحيدة اللي بتفضل هي الملف اللي نزّلته على الموبايل — احتفظ بيه، ويفضّل تبعته لنفسك على واتساب أو Drive.</span></div>
+        ${window.IS_NATIVE ? `<div class="banner green">${ic('shield', 18)}<span><b>حفظ دائم:</b> البيانات متخزنة جوه التطبيق نفسه، ومسح بيانات Chrome مش بيأثر عليها. وبعد كل تعديل بتتحفظ نسخة في ذاكرة الموبايل في فولدر <b dir="ltr">Documents/Hesasy</b> — الفولدر ده بيفضل حتى لو اتمسح التطبيق.${Native.lastSaved() ? '<br>آخر حفظ: ' + Native.lastSaved().toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' }) : ''}</span></div>` : `<div class="banner red">${ic('alert', 18)}<span><b>مهم:</b> "مسح بيانات المتصفح" أو مسح بيانات Chrome بيمسح كل حاجة جوه التطبيق، ومعاها النسخ الداخلية. النسخة الوحيدة اللي بتفضل هي الملف اللي نزّلته على الموبايل — احتفظ بيه، ويفضّل تبعته لنفسك على واتساب أو Drive.</span></div>`}
       </div></section>
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm" style="color:var(--red)">منطقة الخطر</h2>
