@@ -40,6 +40,7 @@ Views.groups = () => {
             ${fresh ? '<span class="chip green">ملخص جاهز</span>' : ''}${ic('chev', 18)}</a>`;
         }).join('')}</div>` : `<div class="card small muted">مفيش مجموعات للصف ده</div>`}</section>`;
     }).join('')}
+    ${st.groups.length ? `<button class="btn ghost" data-act="report" data-r="attendance">${ic('print', 18)} تقرير الحضور والغياب لكل المجموعات</button>` : ''}
     <button class="btn accent lg" data-act="editGroup">${ic('plus', 20)} مجموعة جديدة</button>
   </main>`;
 };
@@ -87,6 +88,7 @@ Views.group = gid => {
       <button class="btn" data-act="grpPrint" data-g="${g.id}" data-n="${cyc.n}">${ic('print', 18)} طباعة / صورة</button>
       <button class="btn ghost" data-act="grpWa" data-g="${g.id}" data-n="${cyc.n}">${ic('share', 18)} نسخ الملخص</button>
     </div>`}
+    <button class="btn soft" data-act="report" data-r="attendance" data-g="${g.id}">${ic('cal', 18)} تقرير الحضور والغياب — شهر أو ترم</button>
     ${now.length && others.length ? `<button class="btn ${sel ? 'danger-ghost' : 'soft'}" data-act="grpSelMode">${ic(sel ? 'x' : 'users', 18)} ${sel ? 'إلغاء النقل' : 'نقل طلاب لمجموعة تانية'}</button>` : ''}
     <div class="legend" style="padding:0 4px"><span><span class="ad p">✓</span> حضر</span><span><span class="ad a">✗</span> غاب</span><span><span class="ad o">–</span> متسجلش</span><span><span class="ad x">·</span> مكانش في المجموعة</span><span><span class="ad f"></span> لسه</span></div>
     ${sel ? `<div class="banner blue">${ic('info', 18)}<span>اختار الطلاب اللي هتنقلهم، وبعدين "نقل". الحضور والغياب وعدد الحصص بيتنقلوا معاهم، وبيكمّلوا الدورة من مكانهم.</span></div>` : ''}
@@ -204,4 +206,58 @@ Print.groupMonth = o => {
     ${heavy.length ? `<h2>الأكثر غيابًا في الشهر</h2><table><thead><tr><th>#</th><th>الطالب</th><th class="c">غاب</th><th>أيام الغياب</th><th>موبايل ولي الأمر</th></tr></thead><tbody>
       ${heavy.map((r, i) => `<tr>${td(i + 1, 'c')}${td(esc(r.student.name))}${td(r.abs, 'c red')}${td(r.items.filter(x => x.mark === 'a').map(x => E.fmtShort(x.date)).join('، '))}${td(esc(r.student.phone || ''), 'n')}</tr>`).join('')}</tbody></table>` : ''}
     ${moved.length ? `<h2>نقل خلال الشهر</h2><table><tbody>${moved.map(r => `<tr>${td(esc(r.student.name))}${td(r.moves.map(moveText).join(' · '))}</tr>`).join('')}</tbody></table>` : ''}`);
+};
+
+/* ---------- تقرير الحضور والغياب للمجموعة: شهر / ترم / سنة ---------- */
+Print.attendance = o => {
+  const st = App.st, t = E.today();
+  App.ui.attG = o.g || ''; App.ui.attP = o.p || 'month'; if (o.m) App.ui.attM = o.m;
+  let P;
+  if (!o.p || o.p === 'month') { const m = (o.m || t.slice(0, 7)) + '-01'; P = { from: m, to: E.monthEnd(m), label: 'شهر ' + E.monthLabel(m), month: true }; }
+  else if (o.p === 'year') { const ts = st.settings.terms || []; P = { from: ts.map(x => x.start).sort()[0], to: ts.map(x => x.end).sort().pop(), label: 'السنة الدراسية' }; }
+  else { const tm = (st.settings.terms || []).find(x => x.id === o.p); P = { from: tm.start, to: tm.end, label: tm.name }; }
+  if (P.from > t) return toast('الفترة دي لسه مبدأتش', { type: 'warn' });
+  const to = P.to < t ? P.to : t;                 // لحد النهارده بس
+  const gs = (o.g ? [E.groupById(st, o.g)] : st.groups.slice().sort((a, b) => a.subjectId.localeCompare(b.subjectId))).filter(Boolean);
+  const reps = gs.map(g => E.groupAttendance(st, g.id, P.from, to, t, nowHM())).filter(r => o.g || r.rows.length);
+  const mk = { p: ['p', '✓'], a: ['a', '✗'], none: ['o', '–'], future: ['f', ''], out: ['o', '·'] };
+  const rateTag = r => r == null ? '<span class="muted">—</span>' : `<span class="tag ${r >= 85 ? 'g' : r >= 70 ? 'a' : 'r'}">${r}٪</span>`;
+  const gName = g => E.SUBJ[g.subjectId].name + ' · ' + E.groupLabel(st, g);
+
+  const one = R => {
+    const g = R.group, grid = P.month && R.held <= 8;   // الشهر: كل حصة بتاريخها · الترم/السنة: عمود لكل شهر
+    const held = R.sessions.filter(x => x.date <= t);
+    const heavy = R.rows.filter(r => r.abs >= (P.month ? 2 : 3)).sort((a, b) => b.abs - a.abs);
+    let h = `<h2>${esc(gName(g))}</h2>
+      <div class="boxes"><div>الطلاب<b>${R.rows.length}</b></div><div>حصص اتعملت<b>${R.held}</b></div><div class="g">حضور<b class="green">${R.pres}</b></div><div class="r">غياب<b class="red">${R.abs}</b></div><div class="a">نسبة الحضور<b>${R.rate == null ? '—' : R.rate + '٪'}</b></div></div>`;
+    const offNote = () => { const off = R.off.filter(x => x.date <= to); return off.length ? `<div class="note"><b>حصص مش محسوبة:</b> ${off.map(x => E.fmtShort(x.date) + ' ' + (x.status === 'cancelled' ? 'اتلغت' : 'اتأجلت')).join(' · ')}</div>` : ''; };
+    if (!R.rows.length) return h + `<div class="note">${R.held ? 'مفيش طلاب في المجموعة دي في الفترة دي' : 'مفيش حصص اتعملت للمجموعة دي في الفترة دي لحد النهارده'}</div>` + offNote();
+    if (grid) {
+      h += `<table><thead><tr><th>#</th><th>الطالب</th>${held.map(x => `<th class="c">${E.fmtShort(x.date)}${x.type === 'makeup' ? '<br><span style="font-weight:400;font-size:7.5pt">تعويضية</span>' : ''}</th>`).join('')}<th class="c">حضر</th><th class="c">غاب</th><th class="c">النسبة</th></tr></thead><tbody>
+        ${R.rows.map((r, i) => `<tr>${td(i + 1, 'c')}${td('<b>' + esc(r.student.name) + '</b>' + (r.here ? '' : ' <span class="muted" style="font-size:8pt">(مش في المجموعة دلوقتي)</span>'))}${r.items.filter(x => x.date <= t).map(x => td(`<span class="mk ${mk[x.mark][0]}">${mk[x.mark][1]}</span>`, 'c')).join('')}${td(r.pres, 'c green')}${td(r.abs, 'c ' + (r.abs ? 'red' : ''))}${td(rateTag(r.rate), 'c')}</tr>`).join('')}</tbody>
+        <tfoot><tr>${td('')}${td('عدد الحاضرين')}${held.map(x => { const v = st.attendance[x.key] || {}; return td(R.rows.filter(r => v[r.student.id] === 'p').length, 'c n'); }).join('')}${td(R.pres, 'c n')}${td(R.abs, 'c n')}${td(R.rate == null ? '—' : R.rate + '٪', 'c n')}</tr></tfoot></table>`;
+    } else {
+      const ms = R.months.filter(m => m <= t);
+      h += `<table><thead><tr><th>#</th><th>الطالب</th>${ms.map(m => `<th class="c">${E.monthName(m)}<br><span style="font-weight:400;font-size:7.5pt">حضر / غاب</span></th>`).join('')}<th class="c">حصصه</th><th class="c">حضر</th><th class="c">غاب</th><th class="c">متسجلش</th><th class="c">النسبة</th></tr></thead><tbody>
+        ${R.rows.map((r, i) => `<tr>${td(i + 1, 'c')}${td('<b>' + esc(r.student.name) + '</b>' + (r.here ? '' : ' <span class="muted" style="font-size:8pt">(مش في المجموعة دلوقتي)</span>'))}${r.byMonth.filter(b => b.m <= t).map(b => td(b.inG ? `<span class="green">${b.pres}</span> / <span class="${b.abs ? 'red' : 'muted'}">${b.abs}</span>` : '<span class="muted">—</span>', 'c n')).join('')}${td(r.counted, 'c n')}${td(r.pres, 'c green')}${td(r.abs, 'c ' + (r.abs ? 'red' : ''))}${td(r.none || '', 'c muted')}${td(rateTag(r.rate), 'c')}</tr>`).join('')}</tbody>
+        <tfoot><tr>${td('')}${td('الإجمالي')}${ms.map(m => { const b = R.rows.map(r => r.byMonth.find(x => x.m === m)); return td(`${b.reduce((a, x) => a + x.pres, 0)} / ${b.reduce((a, x) => a + x.abs, 0)}`, 'c n'); }).join('')}${td(R.rows.reduce((a, r) => a + r.counted, 0), 'c n')}${td(R.pres, 'c n')}${td(R.abs, 'c n')}${td(R.none, 'c n')}${td(R.rate == null ? '—' : R.rate + '٪', 'c n')}</tr></tfoot></table>`;
+    }
+    if (heavy.length) h += `<h3>الأكثر غيابًا</h3><table><thead><tr><th>#</th><th>الطالب</th><th class="c">غاب</th><th>أيام الغياب</th><th>موبايل ولي الأمر</th></tr></thead><tbody>
+      ${heavy.map((r, i) => `<tr>${td(i + 1, 'c')}${td(esc(r.student.name))}${td(r.abs, 'c red')}${td(r.items.filter(x => x.mark === 'a').map(x => E.fmtShort(x.date)).join('، '))}${td(esc(r.student.phone || '—'), 'n')}</tr>`).join('')}</tbody></table>`;
+    h += offNote();
+    if (R.none) h += `<div class="note">فيه <b>${R.none}</b> حصة لطلاب متسجلش فيها حضور أو غياب (–). سجّلها من صفحة الحصة علشان التقرير يبقى دقيق.</div>`;
+    return h;
+  };
+
+  const legend = `<div class="note">✓ حضر · ✗ غاب · – متسجلش · · مكانش في المجموعة · النسبة = الحضور من الحصص المتسجلة · من ${E.fmtDate(P.from)} لحد ${E.fmtDate(to)}${to < P.to ? ' (النهارده)' : ''}</div>`;
+  let html = legend;
+  if (!o.g) {
+    const tp = reps.reduce((a, r) => a + r.pres, 0), ta = reps.reduce((a, r) => a + r.abs, 0);
+    html += `<h2>ملخص كل المجموعات</h2><table><thead><tr><th>المجموعة</th><th>الصف</th><th class="c">طلاب</th><th class="c">حصص</th><th class="c">حضور</th><th class="c">غياب</th><th class="c">النسبة</th></tr></thead><tbody>
+      ${reps.map(R => `<tr>${td('<b>' + esc(gName(R.group)) + '</b>')}${td(E.GRADES[E.SUBJ[R.group.subjectId].grade])}${td(R.rows.length, 'c n')}${td(R.held, 'c n')}${td(R.pres, 'c green')}${td(R.abs, 'c ' + (R.abs ? 'red' : ''))}${td(rateTag(R.rate), 'c')}</tr>`).join('') || '<tr><td colspan="7">مفيش حصص في الفترة دي</td></tr>'}</tbody>
+      <tfoot><tr>${td('الإجمالي')}${td('')}${td('')}${td(reps.reduce((a, r) => a + r.held, 0), 'c n')}${td(tp, 'c n')}${td(ta, 'c n')}${td(tp + ta ? Math.round(tp / (tp + ta) * 100) + '٪' : '—', 'c n')}</tr></tfoot></table>`;
+  }
+  html += reps.map(one).join('');
+  const g1 = o.g ? gs[0] : null;
+  doPrint('الحضور والغياب' + (g1 ? ': ' + E.SUBJ[g1.subjectId].name : ' — كل المجموعات'), (g1 ? E.GRADES[E.SUBJ[g1.subjectId].grade] + ' · ' + E.groupLabel(st, g1) + ' · ' : '') + P.label, html);
 };

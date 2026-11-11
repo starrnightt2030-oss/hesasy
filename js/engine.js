@@ -488,6 +488,41 @@
     return { group: g, cycle: cyc, rows, pres: P, abs: A, rate: P + A ? Math.round(P / (P + A) * 100) : null, unrecorded: rows.reduce((t, r) => t + r.none, 0) };
   }
 
+  /* ---------- حضور وغياب المجموعة في فترة (شهر / ترم / سنة) ----------
+   * كل الحصص العادية والتعويضية في الفترة، والطالب بيتحسب في الحصص اللي كان فيها في المجموعة بس
+   * (لو اتنقل أو انسحب أو اشترك في النص). الملغية والمؤجلة بتظهر لوحدها ومش بتتحسب. */
+  function groupAttendance(st, gid, from, to, asOf, nowT) {
+    asOf = asOf || today();
+    const occ = occurrences(st, gid, from, to);
+    // الحصص اللي كان فيها طلاب في المجموعة بس (مش حصص قبل ما حد يشترك)
+    const ses = occ.filter(o => o.status === 'normal' && studentsInSession(st, o).length);
+    const off = occ.filter(o => o.status !== 'normal');
+    const done = o => o.date < asOf || (o.date === asOf && (!nowT || o.time <= nowT));
+    const held = ses.filter(done);
+    const months = [];
+    ses.forEach(o => { const m = monthStart(o.date); if (!months.includes(m)) months.push(m); });
+    const members = new Map();
+    ses.forEach(o => studentsInSession(st, o).forEach(x => { if (!members.has(x.student.id)) members.set(x.student.id, x.student); }));
+    const rows = [...members.values()].map(s => {
+      const items = ses.map(o => {
+        const inG = !!enrollmentInGroup(s, gid, o.date);
+        const v = (st.attendance[o.key] || {})[s.id];
+        const mark = !inG ? 'out' : !done(o) ? 'future' : v === 'p' ? 'p' : v === 'a' ? 'a' : 'none';
+        return { key: o.key, date: o.date, time: o.time, type: o.type, mark };
+      });
+      const byMonth = months.map(m => {
+        const it = items.filter(x => monthStart(x.date) === m);
+        return { m, pres: it.filter(x => x.mark === 'p').length, abs: it.filter(x => x.mark === 'a').length, none: it.filter(x => x.mark === 'none').length, inG: it.some(x => x.mark !== 'out') };
+      });
+      const pres = items.filter(x => x.mark === 'p').length, abs = items.filter(x => x.mark === 'a').length;
+      const none = items.filter(x => x.mark === 'none').length;
+      return { student: s, items, byMonth, pres, abs, none, counted: pres + abs + none, rate: pres + abs ? Math.round(pres / (pres + abs) * 100) : null, here: !!enrollmentInGroup(s, gid, to < asOf ? to : asOf) };
+    }).sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
+    const P = rows.reduce((t, r) => t + r.pres, 0), A = rows.reduce((t, r) => t + r.abs, 0);
+    return { group: groupById(st, gid), from, to, sessions: ses, held: held.length, off, months, rows, pres: P, abs: A,
+      none: rows.reduce((t, r) => t + r.none, 0), rate: P + A ? Math.round(P / (P + A) * 100) : null };
+  }
+
   /* ---------- نقل طالب من مجموعة لمجموعة تانية لنفس المادة ----------
    * الحضور والغياب متخزنين بالحصة، وعدد الحصص بيتحسب على كل المجموعات اللي الطالب كان فيها،
    * فالنقل بيضيف بس سطر في groupHist: من التاريخ ده الطالب في المجموعة الجديدة. */
@@ -580,7 +615,7 @@
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
     PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
-    groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
+    groupAttendance, groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;
 })(typeof window !== 'undefined' ? window : globalThis);

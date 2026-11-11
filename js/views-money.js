@@ -192,7 +192,7 @@ Views.reports = () => {
     ['collection', 'التحصيل الشهري', 'إجمالي كل مجموعة وكل صف في الشهر', 'wallet', 'green'],
     ['late', 'كشف المستحقات', 'كل اللي عليهم فلوس: متأخرين، خلصوا الشهر، الحصة التالتة', 'alert', 'red'],
     ['groupMonth', 'ملخص شهر المجموعة', 'بعد كل ٤ حصص: حضور وغياب كل طالب في المجموعة', 'users', 'amber'],
-    ['attendance', 'كشف الغياب', 'حضور وغياب كل حصة للمجموعة في الشهر', 'check', 'amber'],
+    ['attendance', 'الحضور والغياب للمجموعات', 'شهر، أو الترم الأول أو التاني، أو السنة — لمجموعة أو كل المجموعات', 'check', 'amber'],
     ['schedule', 'الجدول الأسبوعي', 'جدول الحصص جاهز للطباعة والتعليق', 'cal', 'blue'],
     ['term', 'تقرير الترم / السنة', 'المستحق والمحصل شهر بشهر', 'chart', 'green'],
     ['project', 'مستلزمات المشروع', 'كل بند: مين دفع ومين لأ', 'box', 'green'],
@@ -233,7 +233,14 @@ ACT.report = async el => {
   let body = '', title = '';
   if (r === 'group') { title = 'كشف حساب مجموعة'; body = groupSel(el.dataset.g) + `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts}</select></label>` + monthSel; }
   else if (r === 'collection') { title = 'التحصيل الشهري'; body = monthSel; }
-  else if (r === 'attendance') { title = 'كشف الغياب'; body = groupSel() + monthSel; }
+  else if (r === 'attendance') {
+    title = 'تقرير الحضور والغياب';
+    const sel = el.dataset.g || App.ui.attG || '';
+    const per = App.ui.attP || 'month';
+    body = `<label class="field">المجموعة<select class="input select" id="rp-g"><option value="">كل المجموعات</option>${[1, 2, 3].map(gr => `<optgroup label="${E.GRADES[gr]}">${st.groups.filter(g => E.SUBJ[g.subjectId].grade === gr).map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(E.SUBJ[g.subjectId].name + ' · ' + E.groupLabel(st, g))}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <div class="field">الفترة<div class="seg" id="rp-pseg">${[['month', 'شهر'], ...(st.settings.terms || []).map(t => [t.id, t.name]), ['year', 'السنة']].map(([k, l]) => `<button type="button" data-p="${k}" class="${k === per ? 'on' : ''}">${esc(l)}</button>`).join('')}</div><input type="hidden" id="rp-p" value="${per}"></div>
+      <label class="field" id="rp-mw">الشهر<input class="input" type="month" id="rp-m" value="${App.ui.attM || E.today().slice(0, 7)}"></label>`;
+  }
   else if (r === 'groupMonth') { title = 'ملخص شهر المجموعة'; body = groupSel() + `<label class="field">الشهر (كل ٤ حصص)<select class="input select" id="rp-n"></select></label>`; }
   else if (r === 'term') { title = 'تقرير الترم / السنة'; body = `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts.replace('<option value="month">شهر</option>', '')}</select></label>`; }
   else if (r === 'project') { title = 'مستلزمات المشروع'; body = `<label class="field">البند<select class="input select" id="rp-i"><option value="">كل البنود</option>${st.projectItems.map(it => `<option value="${it.id}" ${it.id === el.dataset.i ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></label>`; }
@@ -250,7 +257,13 @@ ACT.report = async el => {
   if (r === 'student' && !st.students.length) return toast('مفيش طلاب لسه', { type: 'warn' });
   if (!body) return Print[r]({});
   const s = sheet(`<h2>${title}</h2>${body}<button class="btn lg" id="rp-ok">${ic('eye', 20)} عرض التقرير</button>`);
-  const mEl = $('#rp-m', s.el), pEl = $('#rp-p', s.el);
+  const seg = $('#rp-pseg', s.el);
+  if (seg) {
+    const sync = () => { $('#rp-mw', s.el).hidden = $('#rp-p', s.el).value !== 'month'; };
+    seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; $('#rp-p', s.el).value = b.dataset.p; $$('#rp-pseg button', s.el).forEach(x => x.classList.toggle('on', x === b)); sync(); };
+    sync();
+  }
+  const mEl = $('#rp-m', s.el), pEl = seg ? null : $('#rp-p', s.el);
   if (mEl && pEl) { const sync = () => { mEl.closest('label').hidden = pEl.value !== 'month'; }; pEl.onchange = sync; sync(); }
   const nEl = $('#rp-n', s.el), gEl = $('#rp-g', s.el);
   if (nEl && gEl) {
@@ -318,25 +331,6 @@ const Print = {
       <table><thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>المواد اللي عليها</th><th>متأخر</th><th>الحالي</th><th>الإجمالي</th><th>موبايل</th></tr></thead><tbody>
       ${list.map((L, i) => `<tr>${td(i + 1, 'c')}${td(esc(L.student.name))}${td(E.GRADES[L.student.grade])}${td(esc([...new Set(L.charges.filter(c => c.due > 0).map(c => E.SUBJ[c.subjectId].short))].join('، ')))}${td(f0(L.late), L.late ? 'red' : '')}${td(f0(L.current))}${td(f0(L.due), 'red')}${td(esc(L.student.phone || ''))}</tr>`).join('')}</tbody>
       <tfoot><tr>${td('')}${td('الإجمالي')}${td('')}${td('')}${td(f0(T.late))}${td(f0(T.cur))}${td(f0(T.due))}${td('')}</tr></tfoot></table>`);
-  },
-  attendance(o) {
-    const st = App.st, g = E.groupById(st, o.g), m = (o.m || E.today().slice(0, 7)) + '-01';
-    const occ = E.occurrences(st, g.id, m, E.monthEnd(m));
-    const studs = new Map();
-    occ.forEach(x => E.studentsInSession(st, x).forEach(y => studs.set(y.student.id, y.student)));
-    E.studentsInSession(st, { groupId: g.id, date: E.monthEnd(m) }).forEach(y => studs.set(y.student.id, y.student));
-    const list = [...studs.values()].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-    const cell = (x, s) => {
-      if (x.status === 'cancelled') return td('ملغية', 'c');
-      if (x.status === 'postponed') return td('متأجلة', 'c');
-      if (!E.studentsInSession(st, x).some(y => y.student.id === s.id)) return td('—', 'c');
-      const v = (st.attendance[x.key] || {})[s.id];
-      return td(v === 'p' ? '✓' : v === 'a' ? '✗' : '', 'c ' + (v === 'a' ? 'red' : v === 'p' ? 'green' : ''));
-    };
-    doPrint('كشف الغياب: ' + E.SUBJ[g.subjectId].name, E.GRADES[E.SUBJ[g.subjectId].grade] + ' · ' + E.groupLabel(st, g) + ' · ' + E.monthLabel(m),
-      `<table><thead><tr><th>#</th><th>الطالب</th>${occ.map(x => `<th class="c">${E.fmtShort(x.date)}${x.type === 'makeup' ? '<br>تعويضية' : ''}</th>`).join('')}<th class="c">حضر</th><th class="c">غاب</th></tr></thead><tbody>
-      ${list.map((s, i) => { const v = occ.map(x => (st.attendance[x.key] || {})[s.id]); return `<tr>${td(i + 1, 'c')}${td(esc(s.name))}${occ.map(x => cell(x, s)).join('')}${td(v.filter(z => z === 'p').length, 'c green')}${td(v.filter(z => z === 'a').length, 'c red')}</tr>`; }).join('')}</tbody></table>
-      ${!occ.length ? '<p>مفيش حصص في الشهر ده</p>' : ''}`);
   },
   schedule() {
     const st = App.st;
