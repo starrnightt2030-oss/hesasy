@@ -93,6 +93,7 @@ Views.settings = () => {
               <div class="small muted">من غير ربط: زرار "ابعت" بيفتح قايمة المشاركة وتختار منها Drive أو واتساب. الربط بيخلّي التطبيق يرفع بنفسه في فولدر "${Drive.FOLDER}" وتسترجع من جوه التطبيق.</div>`}
         </div>
         <button class="btn sm ghost" data-act="dlBackup">${ic('download', 16)} تنزيل نسخة على الموبايل</button>
+        <a class="btn sm soft" href="#/attlog">${ic('edit', 16)} سجل تعديلات الغياب</a>
         <a class="btn sm soft" href="#/backups">${ic('layers', 16)} النسخ المحفوظة واسترجاعها</a>
         <div class="banner red">${ic('alert', 18)}<span><b>مهم:</b> "مسح بيانات المتصفح" أو مسح بيانات Chrome بيمسح كل حاجة جوه التطبيق، ومعاها النسخ الداخلية. النسخة الوحيدة اللي بتفضل هي الملف اللي نزّلته على الموبايل — احتفظ بيه، ويفضّل تبعته لنفسك على واتساب أو Drive.</span></div>
       </div></section>

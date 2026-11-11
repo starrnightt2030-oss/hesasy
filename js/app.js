@@ -9,7 +9,7 @@ function migrate(s) {
   ['prices', 'reminders', 'privacy', 'backup'].forEach(k => { out.settings[k] = Object.assign({}, d.settings[k], (s.settings || {})[k] || {}); });
   if (!Array.isArray(out.settings.terms) || !out.settings.terms.length) out.settings.terms = d.settings.terms;
   if (!Array.isArray(out.settings.holidays)) out.settings.holidays = [];
-  ['groups', 'students', 'makeups', 'payments', 'projectItems', 'questions'].forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
+  ['groups', 'students', 'makeups', 'payments', 'projectItems', 'questions', 'attLog'].forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
   ['overrides', 'attendance', 'projectPays', 'qgrades'].forEach(k => { if (!out[k] || typeof out[k] !== 'object') out[k] = {}; });
   out.students.forEach(st => { st.enrollments = st.enrollments || []; st.enrollments.forEach(e => { if (!e.groupHist) e.groupHist = [{ from: e.startDate, groupId: e.groupId }]; }); });
   out.groups.forEach(g => { if (!g.schedule) g.schedule = [{ from: '2000-01-01', day: g.day, time: g.time }]; });
@@ -166,7 +166,7 @@ function dailyChecks() {
   const late = [...App.C.ledgers.values()].filter(L => L.late > 0).sort((a, b) => b.late - a.late);
   const today = E.sessionsOnDay(App.st, t);
   const al = E.dueAlerts(App.st, App.C);
-  const showLate = R.overdue && (late.length || al.ended.length || al.third.length);
+  const showLate = R.overdue && (late.length || al.ended.length || al.third.length) || (App.miss && App.miss.count);
   if (!R.daily && !showLate) return;
   if (!App.st.groups.length) return;
   localStorage.setItem('hesasy-daily', t);
@@ -176,6 +176,8 @@ function dailyChecks() {
     ${R.overdue && late.length ? `<div class="banner red">${ic('wallet', 18)}<span><b>${late.length} ${late.length > 10 || late.length < 3 ? 'طالب' : 'طلاب'} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 5).map(L => esc(L.student.name)).join('، ')}${late.length > 5 ? ' و' + (late.length - 5) + ' كمان' : ''}</span></div>` : ''}
     ${R.overdue && al.ended.length ? `<div class="banner red">${ic('alert', 18)}<span><b>${al.ended.length} خلصوا الشهر ولسه مدفعوش</b><br>${al.ended.slice(0, 5).map(r => esc(r.L.student.name)).join('، ')}${al.ended.length > 5 ? ' و' + (al.ended.length - 5) + ' كمان' : ''}</span></div>` : ''}
     ${R.overdue && al.third.length ? `<div class="banner amber">${ic('bell', 18)}<span><b>${al.third.length} وصلوا الحصة التالتة ولسه مدفعوش</b><br>${al.third.slice(0, 5).map(r => esc(r.L.student.name)).join('، ')}${al.third.length > 5 ? ' و' + (al.third.length - 5) + ' كمان' : ''}</span></div>` : ''}
+    ${App.miss && App.miss.count ? `<a class="banner red" href="#/missing" data-close style="text-decoration:none">${ic('check', 18)}<span><b>${App.miss.count} غياب متسجلش</b> في ${App.miss.sessions.length} ${App.miss.sessions.length === 1 ? 'حصة' : 'حصص'} فاتت — اضغط علشان تسجلهم</span></a>` : ''}
+    ${App.ev && (App.ev.started.length || App.ev.finished.length) ? `<a class="banner blue" href="#/months" data-close style="text-decoration:none">${ic('cal', 18)}<span>${App.ev.started.length ? `<b>${App.ev.started.length}</b> بدأوا شهر جديد النهارده` : ''}${App.ev.started.length && App.ev.finished.length ? ' · ' : ''}${App.ev.finished.length ? `<b>${App.ev.finished.length}</b> خلصوا شهرهم والحصة الجاية شهر جديد` : ''}</span></a>` : ''}
     ${R.daily ? (today.length ? `<div class="label-sm">حصص النهارده (${today.filter(o => o.status === 'normal').length})</div>${today.map(o => sessionCard(o)).join('')}` : '<div class="banner blue">' + ic('cal', 18) + '<span>مفيش حصص النهارده</span></div>') : ''}
     <div class="grid2">${showLate ? '<a class="btn danger-ghost" href="#/dues" data-close>التحصيل</a>' : '<a class="btn ghost" href="#/schedule" data-close>الجدول</a>'}<button class="btn" data-close>تمام</button></div>`, { center: true });
   s.el.addEventListener('click', e => { if (e.target.closest('a.session')) s.close(); });
@@ -369,7 +371,7 @@ function setupUpdates() {
   else if (App.sec.lock && !sessionStillValid()) showLock();
   else unlock(true);
   // تحديث العدادات كل دقيقة (حالة الحصص "بعد X دقيقة")
-  setInterval(() => { if (App.unlocked && !document.hidden && !$('.overlay') && !document.activeElement.matches('input,select,textarea')) { const r = route().name; if (r === 'home' || r === 'schedule') render(); } }, 60000);
+  setInterval(() => { if (App.unlocked && !document.hidden) { recompute(); if (!$('.overlay') && !$('.rv') && !document.activeElement.matches('input,select,textarea')) { const r = route().name; if (['home', 'schedule', 'missing', 'months', 'dues'].includes(r)) render(); } } }, 60000);
   // يوم جديد: إعادة الحساب
   let day = E.today();
   setInterval(() => { if (E.today() !== day) { day = E.today(); recompute(); if (App.unlocked) { render(); dailyChecks(); dailyBackup(); } } }, 60000);

@@ -3,7 +3,7 @@
 const E = window.Engine;
 const App = window.App = {
   st: null, C: null, sec: null, unlocked: false, revealed: false, ui: {}, hiddenAt: 0,
-  version: '1.8.0'
+  version: '1.9.0'
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -250,7 +250,12 @@ function pickFile(accept) {
 }
 
 /* ---------- حفظ التعديلات ---------- */
-function recompute() { App.C = E.computeAll(App.st); }
+function recompute() {
+  E.setNow(E.today(), nowHM());            // الحصة بتتحسب بعد معادها بس
+  App.C = E.computeAll(App.st);
+  App.miss = E.missingAttendance(App.st);
+  App.ev = E.cycleEvents(App.st);
+}
 function commit(fn, msg, opt = {}) {
   fn(App.st);
   recompute();

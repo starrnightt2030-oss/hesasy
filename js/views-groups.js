@@ -78,9 +78,10 @@ Views.group = gid => {
     ${!cs.length ? `<div class="card"><div class="empty"><span class="ic">${ic('users', 28)}</span><h3>لسه مفيش حصص اتعملت للمجموعة دي</h3><span class="sm">${now.length ? 'فيها ' + now.length + ' طالب. ' : ''}أول ما الحصص تبدأ هيظهر هنا ملخص كل شهر (كل ٤ حصص).</span></div></div>
     ${now.length ? `<div class="card tight">${now.map(({ student: s, enrollment: e }) => { const P = E.cyclePosition(st, e, E.today()); const h = (e.groupHist || []).slice().sort((a, b) => a.from.localeCompare(b.from)).pop(); return `<a class="list-row tap" href="#/student/${s.id}"><span class="avatar" style="width:38px;height:38px">${esc(initial(s.name))}</span><span class="grow stack" style="gap:3px"><span class="b ellipsis">${esc(s.name)}</span><span class="small muted">حصصه ${P.n} · الدورة ${P.cycle} حصة ${P.pos} من 4${h && h.from > E.today() ? ' · يبدأ هنا ' + E.fmtShort(h.from) : ''}</span></span>${ic('chev', 18)}</a>`; }).join('')}</div>` : ''}
     ${now.length && others.length ? `<button class="btn soft" data-act="moveAllHere" data-g="${g.id}">${ic('users', 18)} نقل طلاب لمجموعة تانية</button>` : ''}` : `
-    <div class="chips">${cs.map(c => `<button class="fchip ${c.n === cyc.n ? 'on' : ''}" data-act="grpCycle" data-n="${c.n}">الشهر ${c.n}${c.complete ? ' ✓' : ''}</button>`).join('')}</div>
+    <div class="chips">${cs.map(c => `<button class="fchip ${c.n === cyc.n ? 'on' : ''}" data-act="grpCycle" data-n="${c.n}">شهر المجموعة ${c.n}${c.complete ? ' ✓' : ''}</button>`).join('')}</div>
+    <div class="small muted" style="padding:0 4px;line-height:1.7">${ic('info', 14)} "شهر المجموعة" = كل ٤ حصص من أول حصة في المجموعة. حساب كل طالب ماشي على <b>شهره هو</b> (من أول حصة ليه) — ظاهر تحت اسمه.</div>
     <div class="card row between" style="padding:12px 14px">
-      <span class="stack" style="gap:2px"><span class="b">الشهر ${cyc.n} · ${E.fmtShort(cyc.from)} ← ${E.fmtShort(cyc.sessions[cyc.sessions.length - 1].date)}</span>
+      <span class="stack" style="gap:2px"><span class="b">شهر المجموعة ${cyc.n} · ${E.fmtShort(cyc.from)} ← ${E.fmtShort(cyc.sessions[cyc.sessions.length - 1].date)}</span>
         <span class="small muted">${cyc.complete ? 'الـ٤ حصص خلصوا' : 'اتعمل ' + cyc.held + ' من 4 حصص'}${S.unrecorded ? ' · ' + S.unrecorded + ' غياب متسجلش' : ''}</span></span>
       <span class="chip ${cyc.complete ? 'green' : 'blue'}">${cyc.complete ? 'خلص' : 'شغال'}</span></div>
     ${cyc.complete ? `<div class="banner green">${ic('check', 18)}<span><b>ملخص الشهر جاهز.</b> كل طالب حضوره وغيابه في الـ٤ حصص — اطبعه أو احفظه صورة وابعته.</span></div>` : ''}
@@ -97,7 +98,7 @@ Views.group = gid => {
       const inner = `
         ${sel ? `<span class="box-ck ${on ? 'on' : ''} ${can ? '' : 'dis'}">${ic('check', 14, 3)}</span>` : `<span class="avatar ${r.abs >= 2 ? 'red' : r.abs ? 'amber' : ''}" style="width:38px;height:38px">${esc(initial(s.name))}</span>`}
         <span class="grow stack" style="gap:4px;min-width:0"><span class="b ellipsis">${esc(s.name)}</span>
-          <span class="small muted">${r.extra ? 'انضم بعد الشهر ده' : `حضر ${r.pres} · غاب ${r.abs}`} · حصصه ${r.pos.n} · الدورة ${r.pos.cycle} حصة ${r.pos.pos || 0} من 4</span>
+          <span class="small muted">${r.extra ? 'انضم بعد الشهر ده' : `حضر ${r.pres} · غاب ${r.abs}`} · <b style="color:var(--ink)">شهره ${r.pos.cycle}: حصة ${r.pos.pos || 0} من 4</b></span>
           ${r.moves.length ? `<span class="small" style="color:var(--blue-text,#1D4AA8);font-weight:600">${r.moves.map(moveText).join(' · ')}</span>` : ''}</span>
         ${r.extra ? '' : gmDots(r.items)}`;
       return sel

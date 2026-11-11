@@ -156,7 +156,14 @@
   const isEnrollmentActive = (e, d) => e.startDate <= d && (!e.endDate || e.endDate >= d);
 
   /* الحصص المحسوبة على الطالب في المادة لحد تاريخ معين (العادية والتعويضية، من غير الملغية والمؤجلة) */
-  function enrollmentSessions(st, e, upTo) {
+  /* الساعة دلوقتي: الحصة بتتحسب "اتعملت" بس بعد معادها، مش من أول اليوم.
+   * setNow(today, 'HH:MM') بيتنده من التطبيق؛ في الاختبارات من غيره اليوم كله بيتحسب زي الأول. */
+  let NOW = null;
+  function setNow(d, t) { NOW = d && t ? { d, t } : null; }
+  const notYet = (o, upTo) => NOW && upTo === NOW.d && o.date === NOW.d && o.time > NOW.t;
+
+  /* all=true: كل حصص اليوم حتى اللي لسه مجاش معادها (لمعرفة رقم حصة معينة) */
+  function enrollmentSessions(st, e, upTo, all) {
     const end = e.endDate && e.endDate < upTo ? e.endDate : upTo;
     if (e.startDate > end) return [];
     const hist = (e.groupHist || []).slice().sort((a, b) => a.from.localeCompare(b.from));
@@ -167,7 +174,7 @@
       const realTo = to < end ? to : end;
       if (from <= realTo) out = out.concat(occurrences(st, h.groupId, from, realTo));
     });
-    return out.filter(o => o.status === 'normal');
+    return out.filter(o => o.status === 'normal' && (all || !notYet(o, upTo)));
   }
 
   /* ---------- الأسعار والعروض ---------- */
@@ -252,8 +259,8 @@
   }
 
   /* موقع الطالب في الدورة عند حصة معينة: "حصة 3 من 4" */
-  function cyclePosition(st, e, date) {
-    const ses = enrollmentSessions(st, e, date);
+  function cyclePosition(st, e, date, all) {
+    const ses = enrollmentSessions(st, e, date, all);
     const n = ses.length;
     if (!n) return { cycle: 1, pos: 0, n: 0 };
     return { cycle: Math.ceil(n / 4), pos: ((n - 1) % 4) + 1, n };
@@ -560,6 +567,44 @@
     return e;
   }
 
+  /* ---------- الغياب الناقص ----------
+   * كل حصة اتعملت (من تاريخ أول حصة لكل طالب لحد دلوقتي) والطالب كان فيها ومتسجلش له حضور ولا غياب */
+  function missingAttendance(st, asOf) {
+    asOf = asOf || today();
+    const by = new Map();
+    for (const s of st.students) for (const e of s.enrollments) {
+      for (const o of enrollmentSessions(st, e, asOf)) {
+        if ((st.attendance[o.key] || {})[s.id]) continue;
+        let r = by.get(o.key);
+        if (!r) { r = { o, students: [] }; by.set(o.key, r); }
+        if (!r.students.some(x => x.id === s.id)) r.students.push(s);
+      }
+    }
+    const list = [...by.values()].sort((a, b) => (b.o.date + b.o.time).localeCompare(a.o.date + a.o.time));
+    return { sessions: list, count: list.reduce((t, r) => t + r.students.length, 0) };
+  }
+
+  /* ---------- بداية ونهاية الشهور (كل ٤ حصص) ----------
+   * finished: خلص الـ٤ حصص والحصة الجاية هتبدأ شهر جديد · started: بدأ شهر جديد في حصة النهارده */
+  function cycleEvents(st, asOf) {
+    asOf = asOf || today();
+    const finished = [], started = [];
+    for (const s of st.students) for (const e of s.enrollments) {
+      if (e.endDate && e.endDate <= asOf) continue;
+      const done = enrollmentSessions(st, e, asOf);
+      const n = done.length;
+      if (!n) continue;
+      const row = { student: s, enrollment: e, subjectId: e.subjectId, groupId: currentGroupId(e), n, month: Math.ceil(n / 4) };
+      if (n % 4 === 0) {
+        const nxt = enrollmentSessions(st, e, addDays(asOf, 60), true).find(o => !done.some(d => d.key === o.key));
+        finished.push(Object.assign(row, { last: done[n - 1].date, next: nxt ? nxt.date : null, nextMonth: n / 4 + 1 }));
+      } else if (n % 4 === 1 && n > 1 && done[n - 1].date === asOf) {
+        started.push(Object.assign(row, { date: asOf }));
+      }
+    }
+    return { finished, started };
+  }
+
   /* ---------- تذكيرات التحصيل ----------
    * third: وصل الحصة التالتة في الشهر ولسه مدفعش · ended: خلص الـ٤ حصص ولسه مدفعش */
   function dueAlerts(st, C) {
@@ -611,10 +656,10 @@
   const E = {
     SUBJECTS, SUBJ, GRADES, WEEK, DAY_NAMES, MONTHS, METHODS, payMethod, payLabel,
     iso, parse, addDays, dow, today, monthKey, monthStart, monthEnd, addMonths, monthName, monthLabel, weekStart, fmtDate, fmtShort, fmtTime,
-    defaultState, uid, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
+    defaultState, uid, setNow, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
-    PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
+    missingAttendance, cycleEvents, PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
     groupAttendance, groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;

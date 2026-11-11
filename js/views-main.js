@@ -62,7 +62,7 @@ Views.home = () => {
       <div class="brand">${brandIcon()}<div class="stack"><div class="brand-name">${esc(st.settings.appName)}</div><div class="sub">${E.fmtDate(t)}${E.termOf(st, t) ? ' · ' + esc(E.termOf(st, t).name) : ''}</div></div></div>
       <div class="head-actions">
         ${eyeBtn()}
-        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${(() => { const al = E.dueAlerts(st, C); const n = late.length + al.ended.length + al.third.length + today.filter(o => sessionState(o).need).length; return ic('bell', 22, 2, n ? 'ring' : '') + (n ? `<span class="badge">${n}</span>` : ''); })()}</button>
+        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${(() => { const al = E.dueAlerts(st, C); const n = late.length + al.ended.length + al.third.length + (App.miss ? App.miss.sessions.length : 0) + (App.ev ? App.ev.started.length : 0); return ic('bell', 22, 2, n ? 'ring' : '') + (n ? `<span class="badge">${n}</span>` : ''); })()}</button>
         <a class="icon-btn" href="#/settings" aria-label="الإعدادات">${ic('gear', 22)}</a>
       </div>
     </div>
@@ -85,6 +85,8 @@ Views.home = () => {
       <span class="ic ${late.length ? 'pulse' : ''}">${ic('alert', 20, 2.4, late.length ? 'ring' : '')}</span>
       <span class="grow stack"><span class="b">${lateMsg}</span><span class="sm" style="color:var(--on-ink-muted)">${late.length ? 'إجمالي المتأخر ' + money(late.reduce((a, L) => a + L.late, 0)) : 'اضغط لعرض التفاصيل حسب المجموعة'}</span></span>
       ${ic('chev', 20)}</a>` : ''}
+
+    ${nothing ? '' : followupHTML()}
 
     ${nothing ? `<section class="card"><div class="empty"><span class="ic">${ic('layers', 30)}</span><h3>أهلًا بيك! نبدأ منين؟</h3>
       <div class="sm">١. أضف المجموعات (المادة + اليوم + الساعة)<br>٢. أضف الطلاب ومواد كل طالب<br>والتطبيق هيحسب كل حاجة لوحده.</div>
@@ -115,6 +117,7 @@ ACT.notifs = () => {
   const need = st.groups.flatMap(g => E.occurrences(st, g.id, E.addDays(t, -14), t)).filter(o => sessionState(o).need);
   const next = E.sessionsOnDay(st, t).filter(o => o.status === 'normal' && minutesUntil(o.date, o.time) > 0);
   const s = sheet(`<h2>التنبيهات</h2>
+    ${followupHTML()}
     ${dueAlertsHTML()}
     ${late.length ? `<div class="banner red">${ic('alert', 18)}<span><b>${late.length} عليهم شهر وبدأوا التاني</b><br>${late.slice(0, 6).map(L => esc(L.student.name) + ' (' + money(L.late) + ')').join('، ')}${late.length > 6 ? ' …' : ''}</span></div>` : `<div class="banner green">${ic('check', 18)}<span>مفيش طلاب متأخرين شهرين</span></div>`}
     ${(() => { const ready = st.groups.map(g => ({ g, c: freshCycle(g.id) })).filter(x => x.c); return ready.length ? `<div class="label-sm">ملخصات شهور خلصت (٤ حصص)</div><div class="card tight">${ready.map(({ g, c }) => `<button class="list-row tap" data-act="openGroupCycle" data-g="${g.id}" data-n="${c.n}" data-close><span class="dot g${E.SUBJ[g.subjectId].grade}"></span><span class="grow stack"><span class="b">${esc(E.SUBJ[g.subjectId].name)} · ${esc(E.groupLabel(st, g))}</span><span class="small muted">الشهر ${c.n} خلص ${E.fmtShort(c.to)} · اعرض الحضور والغياب</span></span>${ic('chev', 18)}</button>`).join('')}</div>` : ''; })()}
@@ -214,13 +217,14 @@ Views.session = key => {
     ${o.type === 'makeup' ? `<div class="banner blue">${ic('info', 18)}<span>حصة تعويضية عن حصة ${E.fmtDate(o.originDate)}</span></div>` : ''}
     ${(() => { const c = E.groupCycles(st, g.id, E.today(), nowHM()).find(x => x.complete && x.sessions[x.sessions.length - 1].key === key); return c ? `<a class="banner green tap" href="#/group/${g.id}" data-act="openGroupCycle" data-g="${g.id}" data-n="${c.n}" style="text-decoration:none">${ic('check', 18)}<span><b>دي آخر حصة في الشهر ${c.n} للمجموعة.</b> افتح ملخص الشهر بالحضور والغياب لكل طالب ←</span></a>` : ''; })()}
     ${future ? `<div class="banner amber">${ic('clock', 18)}<span>الحصة دي لسه مجاتش — تقدر تأجلها أو تلغيها من دلوقتي.</span></div>` : ''}
+    ${o.date < E.today() ? `<div class="banner ${list.some(x => !att[x.student.id]) ? 'red' : 'blue'}">${ic(list.some(x => !att[x.student.id]) ? 'alert' : 'lock', 18)}<span>حصة يوم فات${list.some(x => !att[x.student.id]) ? ` — <b>${list.filter(x => !att[x.student.id]).length} طالب متسجلش غيابهم</b>` : ''}. أي تعديل في غياب متسجل هيطلب تأكيد ويتسجل في سجل التعديلات.</span></div>` : ''}
     <div class="row between"><span class="row small muted" style="gap:6px">${ic('info', 16)} الحصة بتتحسب حضر أو غاب</span>
       ${list.length ? `<button class="btn sm ghost" data-act="allPresent" data-k="${esc(key)}">الكل حاضر</button>` : ''}</div>
   </div>
   <ul style="list-style:none;margin:0;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
     ${list.length ? list.map(({ student: s, enrollment: e }) => {
       const v = att[s.id];
-      const pos = E.cyclePosition(st, e, o.date);
+      const pos = E.cyclePosition(st, e, o.date, true);
       const L = App.C.ledgers.get(s.id);
       return `<li class="att-row ${v === 'a' ? 'abs' : ''}">
         <a href="#/student/${s.id}" class="avatar ${v === 'a' ? 'red' : ''}" style="text-decoration:none" aria-label="ملف ${esc(s.name)}">${esc(initial(s.name))}</a>
@@ -241,11 +245,6 @@ Views.session = key => {
   </div>`}`;
 };
 ACT.openGroupCycle = el => { App.ui.grpId = el.dataset.g; App.ui.grpCycle = +el.dataset.n; App.ui.grpSel = null; go('group', el.dataset.g); };
-ACT.att = el => {
-  const { k, s, v } = el.dataset;
-  Sound.play('tap');
-  commit(st => { st.attendance[k] = st.attendance[k] || {}; if (st.attendance[k][s] === v) delete st.attendance[k][s]; else st.attendance[k][s] = v; });
-};
 ACT.allPresent = el => {
   const k = el.dataset.k, o = E.sessionByKey(App.st, k);
   commit(st => { st.attendance[k] = st.attendance[k] || {}; E.studentsInSession(st, o).forEach(x => { if (!st.attendance[k][x.student.id]) st.attendance[k][x.student.id] = 'p'; }); }, 'اتسجل الكل حاضر (ما عدا اللي متعلم غائب)');
