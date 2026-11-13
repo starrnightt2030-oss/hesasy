@@ -407,3 +407,19 @@ textarea.input { padding: 12px 14px; min-height: 80px; resize: vertical; }
 .fu.amber { border-top-color: var(--accent); } .fu.amber .fu-ic { background: var(--accent-soft); color: var(--accent-text); } .fu.amber .fu-n { color: var(--accent-text); }
 .fu.blue { border-top-color: var(--blue); } .fu.blue .fu-ic { background: var(--blue-soft); color: var(--blue-text); } .fu.blue .fu-n { color: var(--blue-text); }
 a.banner { color: inherit; }
+
+/* ---------- تاب الشهور والفلوس ---------- */
+.mbar { display: flex; height: 30px; border-radius: 12px; overflow: hidden; gap: 2px; }
+.mbar span { display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--display); font-size: 13px; min-width: 26px; }
+.mbar .red, .lg-red { background: var(--red); } .mbar .amber, .lg-amber { background: var(--accent); } .mbar .blue, .lg-blue { background: var(--blue); } .mbar .green, .lg-green { background: var(--green); } .mbar .gray, .lg-gray { background: #9AA7BC; }
+.mbar .amber { color: var(--ink); }
+.mhead { font-family: var(--font); font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+.mhead span { margin-inline-start: auto; font-family: var(--display); font-size: 13px; padding: 1px 10px; border-radius: 999px; background: var(--line-2); }
+.mhead.red { color: var(--red); } .mhead.amber { color: var(--accent-text); } .mhead.blue { color: var(--blue-text); } .mhead.green { color: var(--green-text); } .mhead.gray { color: var(--muted-2); }
+.mrow { padding: 12px 0; }
+.card.tight .mrow + .mrow { border-top: 1px solid var(--line-2); }
+.mslots { display: flex; gap: 5px; }
+.ms { width: 46px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; padding: 3px 0 2px; line-height: 1.15; }
+.ms b { font-size: 13px; height: 15px; } .ms i { font-style: normal; font-size: 10px; font-family: var(--display); }
+.ms.p { background: var(--green-soft); color: var(--green); } .ms.a { background: var(--red-soft); color: var(--red); } .ms.none { background: #EEF0F4; color: var(--muted-2); }
+.ms.future { border: 1.5px dashed var(--field); color: var(--muted); }

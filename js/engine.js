@@ -584,6 +584,31 @@
     return { sessions: list, count: list.reduce((t, r) => t + r.students.length, 0) };
   }
 
+  /* ---------- مكان الطالب في شهره + فلوس الشهر (لمادة واحدة) ----------
+   * stage: 'new' لسه مبدأش · 'left3' بدأ الشهر (فاضله ٣) · 'left2' · 'left1' · 'done' خلص الـ٤ والجاية شهر جديد */
+  function monthStatus(st, s, e, L, asOf) {
+    asOf = asOf || today();
+    const done = enrollmentSessions(st, e, asOf);
+    const n = done.length;
+    const doneKeys = new Set(done.map(o => o.key));
+    const upcoming = (e.endDate && e.endDate <= asOf) ? [] : enrollmentSessions(st, e, addDays(asOf, 70), true).filter(o => !doneKeys.has(o.key));
+    const cycle = n ? Math.ceil(n / 4) : 0;
+    const pos = n ? ((n - 1) % 4) + 1 : 0;
+    const left = n ? 4 - pos : 4;
+    const stage = !n ? 'new' : left === 0 ? 'done' : 'left' + left;
+    const mark = o => { const v = (st.attendance[o.key] || {})[s.id]; return v === 'p' ? 'p' : v === 'a' ? 'a' : 'none'; };
+    const cur = n ? done.slice(n - pos).map(o => ({ date: o.date, key: o.key, mark: mark(o) })) : [];
+    const coming = upcoming.slice(0, left || 4).map(o => ({ date: o.date, key: o.key, mark: 'future' }));
+    const ch = (L ? L.charges : []).filter(c => c.enrollmentId === e.id);
+    const last = ch[ch.length - 1] || null;
+    const oldDue = ch.slice(0, -1).reduce((t, c) => t + c.due, 0);
+    const curDue = last ? last.due : 0, curPaid = last ? last.paid : 0, curAmount = last ? last.amount : 0;
+    const pay = !last ? 'none' : curDue <= 0 ? 'paid' : curPaid > 0 ? 'partial' : 'unpaid';
+    return { n, cycle, pos, left, stage, cur, coming, next: upcoming[0] ? upcoming[0].date : null,
+      nextMonthAt: stage === 'done' ? (upcoming[0] ? upcoming[0].date : null) : (upcoming[left] ? upcoming[left].date : null),
+      price: last ? last.price : null, curAmount, curPaid, curDue, oldDue, due: curDue + oldDue, pay, monthFrom: cur[0] ? cur[0].date : null };
+  }
+
   /* ---------- بداية ونهاية الشهور (كل ٤ حصص) ----------
    * finished: خلص الـ٤ حصص والحصة الجاية هتبدأ شهر جديد · started: بدأ شهر جديد في حصة النهارده */
   function cycleEvents(st, asOf) {
@@ -659,7 +684,7 @@
     defaultState, uid, setNow, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
     groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
-    missingAttendance, cycleEvents, PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
+    missingAttendance, cycleEvents, monthStatus, PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
     groupAttendance, groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;

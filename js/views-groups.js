@@ -27,17 +27,19 @@ Views.groups = () => {
   return `
   <header class="plain-head">${backBtn()}<h1>المجموعات والمواعيد</h1></header>
   <main class="pad">
-    <div class="banner blue">${ic('info', 18)}<span>المجموعة = مادة + يوم + ساعة. افتح المجموعة علشان تشوف ملخص كل شهر (كل ٤ حصص) بالحضور والغياب، أو تنقل طلاب لمجموعة تانية.</span></div>
+    <div class="banner blue">${ic('info', 18)}<span>المجموعة = مادة + يوم + ساعة. افتح أي مجموعة علشان تشوف كل طالب فين في شهره ومين دفع ومين لأ، والحضور والغياب، ونقل الطلاب.</span></div>
     ${[1, 2, 3].map(gr => {
       const gs = st.groups.filter(g => E.SUBJ[g.subjectId].grade === gr);
       return `<section style="display:flex;flex-direction:column;gap:8px"><div class="row" style="gap:8px">${gradeChip(gr)}<span class="small muted">${gs.length} مجموعة</span></div>
         ${gs.length ? `<div class="card tight">${gs.sort((a, b) => a.subjectId.localeCompare(b.subjectId)).map(g => {
-          const cs = cyclesOf(g.id), cur = cs[cs.length - 1], fresh = freshCycle(g.id);
+          const rs = groupMonthRows(g.id);
+          const nDone = rs.filter(r => r.stage === 'done').length, nOwe = rs.filter(r => r.due > 0).length, nLast = rs.filter(r => r.stage === 'left1').length;
           return `<a class="list-row tap" href="#/group/${g.id}">
             <span class="dot g${gr}"></span>
             <span class="grow stack" style="gap:3px"><span class="b">${esc(E.SUBJ[g.subjectId].name)}${g.name ? ' · ' + esc(g.name) : ''}</span>
-              <span class="small muted">${E.DAY_NAMES[E.currentSchedule(g).day]} · ${E.fmtTime(E.currentSchedule(g).time)} · ${count(g.id)} طالب${cur ? ' · الشهر ' + cur.n + ' (حصة ' + cur.held + ' من 4)' : ''}</span></span>
-            ${fresh ? '<span class="chip green">ملخص جاهز</span>' : ''}${ic('chev', 18)}</a>`;
+              <span class="small muted">${E.DAY_NAMES[E.currentSchedule(g).day]} · ${E.fmtTime(E.currentSchedule(g).time)} · ${count(g.id)} طالب</span>
+              ${rs.length ? `<span class="row" style="gap:5px;flex-wrap:wrap">${nDone ? `<span class="chip red">${nDone} خلصوا شهرهم</span>` : ''}${nLast ? `<span class="chip amber">${nLast} فاضلهم حصة</span>` : ''}${nOwe ? `<span class="chip red" style="background:#fff;border:1px solid #F3C4C0">${nOwe} عليهم فلوس</span>` : '<span class="chip green">كله دافع</span>'}</span>` : ''}</span>
+            ${ic('chev', 18)}</a>`;
         }).join('')}</div>` : `<div class="card small muted">مفيش مجموعات للصف ده</div>`}</section>`;
     }).join('')}
     ${st.groups.length ? `<button class="btn ghost" data-act="report" data-r="attendance">${ic('print', 18)} تقرير الحضور والغياب لكل المجموعات</button>` : ''}
@@ -261,4 +263,112 @@ Print.attendance = o => {
   html += reps.map(one).join('');
   const g1 = o.g ? gs[0] : null;
   doPrint('الحضور والغياب' + (g1 ? ': ' + E.SUBJ[g1.subjectId].name : ' — كل المجموعات'), (g1 ? E.GRADES[E.SUBJ[g1.subjectId].grade] + ' · ' + E.groupLabel(st, g1) + ' · ' : '') + P.label, html);
+};
+
+/* ---------- تاب "الشهور والفلوس" في صفحة المجموعة ----------
+ * كل طالب في مكانه من شهره (هو)، ومين دفع شهره ومين لأ */
+const _groupAtt = Views.group;
+const STAGES = [
+  ['done', 'خلصوا شهرهم — الحصة الجاية شهر جديد', 'red', 'check'],
+  ['left1', 'فاضلهم حصة واحدة', 'amber', 'clock'],
+  ['left2', 'فاضلهم حصتين', 'blue', 'clock'],
+  ['left3', 'في أول الشهر — فاضلهم ٣ حصص', 'green', 'refresh'],
+  ['new', 'لسه مبدأوش', 'gray', 'cal']
+];
+const PAYTAG = r => r.oldDue > 0 ? `<span class="chip red">عليه ${money(r.due)}${' · شهر قديم'}</span>`
+  : r.pay === 'paid' ? '<span class="chip green">دفع الشهر</span>'
+  : r.pay === 'partial' ? `<span class="chip amber">باقي ${money(r.curDue)}</span>`
+  : r.pay === 'unpaid' ? `<span class="chip red">مدفعش ${money(r.curDue)}</span>` : '<span class="chip gray">لسه</span>';
+function groupMonthRows(gid) {
+  const st = App.st;
+  return groupMembers(gid).map(({ student: s, enrollment: e }) => ({ student: s, enrollment: e, ...E.monthStatus(st, s, e, App.C.ledgers.get(s.id)) }));
+}
+const slots = r => `<span class="mslots">${r.cur.concat(r.coming).slice(0, 4).map(x => `<span class="ms ${x.mark}"><b>${x.mark === 'p' ? '✓' : x.mark === 'a' ? '✗' : x.mark === 'none' ? '–' : ''}</b><i>${E.parse(x.date).getDate()}/${E.parse(x.date).getMonth() + 1}</i></span>`).join('')}</span>`;
+function monthsTab(g) {
+  const st = App.st, sub = E.SUBJ[g.subjectId];
+  const rows = groupMonthRows(g.id);
+  const f = App.ui.grpFilter || 'all';
+  const shown = rows.filter(r => f === 'all' || (f === 'owe' && r.due > 0) || (f === 'paid' && r.due <= 0 && r.pay !== 'none'));
+  const paid = rows.filter(r => r.pay === 'paid' && r.oldDue <= 0).length;
+  const owe = rows.filter(r => r.due > 0);
+  const oweSum = owe.reduce((t, r) => t + r.due, 0);
+  const cnt = k => rows.filter(r => r.stage === k).length;
+  const head = `
+  <header class="hero-head flat">
+    <div class="row">
+      <a class="icon-btn" href="#/groups" aria-label="رجوع">${ic('back')}</a>
+      <div class="stack grow"><h1 style="font-size:20px">${esc(sub.name)}${g.name ? ' · ' + esc(g.name) : ''}</h1>
+        <span class="sub">${E.GRADES[sub.grade]} · ${E.DAY_NAMES[E.currentSchedule(g).day]} ${E.fmtTime(E.currentSchedule(g).time)} · ${rows.length} طالب</span></div>
+      ${eyeBtn()}
+      <button class="icon-btn" data-act="editGroup" data-g="${g.id}" aria-label="تعديل المجموعة">${ic('edit', 20)}</button>
+    </div>
+    ${grpTabs()}
+    <div class="grid3">
+      <div class="stat glass"><span class="v" style="color:#6EE7A8">${paid}</span><span class="k">دافعين شهرهم</span></div>
+      <div class="stat glass"><span class="v" style="color:#FFA3A3">${owe.length}</span><span class="k">عليهم فلوس</span></div>
+      <div class="stat glass"><span class="v" style="color:#FFC98A;font-size:17px">${moneyN(oweSum)}</span><span class="k">إجمالي المطلوب</span></div></div>
+  </header>`;
+  if (!rows.length) return head + `<main class="pad"><div class="card"><div class="empty"><span class="ic">${ic('users', 28)}</span><h3>مفيش طلاب في المجموعة دي</h3><a class="btn accent" href="#/student-new">${ic('plus', 18)} أضف طالب</a></div></div></main>`;
+  return head + `
+  <main class="pad">
+    <div class="mbar" role="img" aria-label="توزيع الطلاب على شهورهم">${STAGES.filter(([k]) => cnt(k)).map(([k, l, c]) => `<span class="${c}" style="flex:${cnt(k)}"><b>${cnt(k)}</b></span>`).join('')}</div>
+    <div class="legend" style="padding:0 4px">${STAGES.filter(([k]) => cnt(k)).map(([k, l, c]) => `<span><i class="lg-${c}"></i>${l.split(' — ')[0]} (${cnt(k)})</span>`).join('')}</div>
+    <div class="banner blue">${ic('info', 18)}<span>كل طالب شهره بيبدأ من أول حصة ليه، فطلاب المجموعة الواحدة ممكن يكونوا في أماكن مختلفة. المربعات = حصص شهره: ✓ حضر · ✗ غاب · المنقّط = جاية بتاريخها.</span></div>
+    <div class="chips">${[['all', 'الكل (' + rows.length + ')'], ['owe', 'عليهم فلوس (' + owe.length + ')'], ['paid', 'دافعين (' + rows.filter(r => r.due <= 0 && r.pay !== 'none').length + ')']].map(([k, l]) => `<button class="fchip ${f === k ? 'on' : ''}" data-act="grpFilter" data-f="${k}">${l}</button>`).join('')}</div>
+    ${STAGES.map(([k, label, c, icn]) => {
+      const list = shown.filter(r => r.stage === k).sort((a, b) => b.due - a.due || a.student.name.localeCompare(b.student.name, 'ar'));
+      if (!list.length) return '';
+      return `<section style="display:flex;flex-direction:column;gap:8px">
+        <h2 class="mhead ${c}">${ic(icn, 16)} ${label} <span>${list.length}</span></h2>
+        <div class="card tight">${list.map(r => {
+          const s = r.student;
+          let line;
+          if (r.stage === 'new') line = r.next ? 'أول حصة ليه ' + E.fmtDate(r.next) : 'مفيش حصص جاية';
+          else if (r.stage === 'done') line = `خلص الشهر ${r.cycle}${r.next ? ` · الشهر ${r.cycle + 1} يبدأ ${E.fmtDate(r.next)}${r.price ? ' (+' + money(r.price) + ')' : ''}` : ''}`;
+          else line = `الشهر ${r.cycle} · حصة ${r.pos} من 4${r.nextMonthAt ? ' · شهره الجديد ' + E.fmtShort(r.nextMonthAt) : ''}`;
+          return `<div class="mrow">
+            <a class="row tap" href="#/student/${s.id}" style="gap:10px;text-decoration:none;color:inherit;min-width:0;flex:1">
+              <span class="avatar ${r.due > 0 ? 'red' : r.pay === 'paid' ? 'green' : ''}" style="width:38px;height:38px">${esc(initial(s.name))}</span>
+              <span class="grow stack" style="gap:5px;min-width:0"><span class="row between" style="gap:6px"><span class="b ellipsis">${esc(s.name)}</span>${PAYTAG(r)}</span>
+                <span class="small muted">${line}</span>${slots(r)}</span></a>
+            ${r.due > 0 ? `<div class="row" style="gap:6px;margin-top:8px;padding-inline-start:48px"><button class="btn sm ghost" data-act="pay" data-s="${s.id}" style="min-height:34px">${ic('plus', 15, 2.4)} دفعة</button>${s.phone ? `<button class="btn sm green" data-act="waStudent" data-s="${s.id}" style="min-height:34px">${ic('chat', 15)} تذكير</button>` : ''}</div>` : ''}
+          </div>`;
+        }).join('')}</div></section>`;
+    }).join('') || '<div class="card sm muted">مفيش طلاب بالفلتر ده</div>'}
+    <button class="btn ghost" data-act="grpStatusPrint" data-g="${g.id}">${ic('print', 18)} طباعة / صورة لحالة المجموعة</button>
+  </main>`;
+}
+function grpTabs() {
+  const t = App.ui.grpTab || 'months';
+  return `<div class="seg dark" role="tablist">${[['months', 'الشهور والفلوس'], ['att', 'الحضور والغياب']].map(([k, l]) => `<button role="tab" aria-selected="${t === k}" class="${t === k ? 'on' : ''}" data-act="grpTab" data-t="${k}">${l}</button>`).join('')}</div>`;
+}
+ACT.grpTab = el => { App.ui.grpTab = el.dataset.t; App.ui.grpSel = null; render(); };
+ACT.grpFilter = el => { App.ui.grpFilter = el.dataset.f; render(); };
+Views.group = gid => {
+  const g = E.groupById(App.st, gid);
+  if (App.ui.grpId !== gid) App.ui.grpFilter = 'all';
+  if (!g || (App.ui.grpTab || 'months') === 'att') {
+    const html = _groupAtt(gid);
+    return g ? html.replace('</header>', grpTabs() + '</header>') : html;
+  }
+  if (App.ui.grpId !== gid) { App.ui.grpId = gid; App.ui.grpCycle = null; App.ui.grpSel = null; }
+  return monthsTab(g);
+};
+
+/* ---------- طباعة حالة المجموعة ---------- */
+ACT.grpStatusPrint = async el => { if (await needReveal()) Print.groupStatus({ g: el.dataset.g }); };
+Print.groupStatus = o => {
+  const st = App.st, g = E.groupById(st, o.g), sub = E.SUBJ[g.subjectId];
+  const rows = groupMonthRows(g.id);
+  const mk = { p: ['p', '✓'], a: ['a', '✗'], none: ['o', '–'], future: ['f', ''] };
+  const owe = rows.filter(r => r.due > 0);
+  const html = `<div class="boxes"><div>الطلاب<b>${rows.length}</b></div><div class="g">دافعين شهرهم<b class="green">${rows.filter(r => r.pay === 'paid' && r.oldDue <= 0).length}</b></div><div class="r">عليهم فلوس<b class="red">${owe.length}</b></div><div class="r">إجمالي المطلوب<b class="red">${f0(owe.reduce((t, r) => t + r.due, 0))} ج</b></div></div>
+    <div class="note">كل طالب شهره بيبدأ من أول حصة ليه · ✓ حضر · ✗ غاب · – متسجلش · المربع الفاضي = حصة جاية بتاريخها</div>` +
+    STAGES.map(([k, label]) => {
+      const list = rows.filter(r => r.stage === k).sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
+      if (!list.length) return '';
+      return `<h2>${label} (${list.length})</h2><table><thead><tr><th>#</th><th>الطالب</th><th class="c">الشهر</th><th>حصص الشهر</th><th>الشهر الجديد</th><th>الدفع</th><th>المطلوب</th></tr></thead><tbody>
+        ${list.map((r, i) => `<tr>${td(i + 1, 'c')}${td('<b>' + esc(r.student.name) + '</b>')}${td(r.cycle || '—', 'c n')}${td(r.cur.concat(r.coming).slice(0, 4).map(x => `<span class="mk ${mk[x.mark][0]}">${mk[x.mark][1]}</span><span class="muted n" style="font-size:7.5pt"> ${E.fmtShort(x.date)}</span>`).join(' &nbsp;'))}${td(r.stage === 'done' ? (r.next ? E.fmtShort(r.next) : '—') : r.nextMonthAt ? E.fmtShort(r.nextMonthAt) : '—', 'n')}${td(r.oldDue > 0 ? '<span class="tag r">شهر قديم</span>' : r.pay === 'paid' ? '<span class="tag g">دفع</span>' : r.pay === 'partial' ? '<span class="tag a">جزء</span>' : r.pay === 'unpaid' ? '<span class="tag r">مدفعش</span>' : '<span class="tag x">لسه</span>')}${td(r.due > 0 ? '<b class="red">' + f0(r.due) + ' ج</b>' : '—', 'n')}</tr>`).join('')}</tbody></table>`;
+    }).join('');
+  doPrint('حالة المجموعة: ' + sub.name, E.GRADES[sub.grade] + ' · ' + E.groupLabel(st, g) + ' · ' + E.fmtDate(E.today()), html);
 };
