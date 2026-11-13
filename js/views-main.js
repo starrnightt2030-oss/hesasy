@@ -88,6 +88,8 @@ Views.home = () => {
 
     ${nothing ? '' : followupHTML()}
 
+    ${nothing ? '' : homeGroupsHTML()}
+
     ${nothing ? `<section class="card"><div class="empty"><span class="ic">${ic('layers', 30)}</span><h3>أهلًا بيك! نبدأ منين؟</h3>
       <div class="sm">١. أضف المجموعات (المادة + اليوم + الساعة)<br>٢. أضف الطلاب ومواد كل طالب<br>والتطبيق هيحسب كل حاجة لوحده.</div>
       <a class="btn accent" href="#/groups">${ic('plus', 18)} أضف أول مجموعة</a></div></section>` : `
@@ -156,7 +158,7 @@ Views.schedule = () => {
     <div class="legend"><span><i style="background:var(--g1)"></i>الصف الأول</span><span><i style="background:var(--g2)"></i>الصف الثاني</span><span><i style="background:var(--g3)"></i>الصف الثالث</span></div>
   </header>
   <main class="pad">
-    <a class="btn ghost" href="#/groups">${ic('layers', 18)} إدارة المجموعات والمواعيد</a>
+    <a class="btn ghost" href="#/groups">${ic('layers', 18)} المجموعات — الشهور والفلوس والمواعيد</a>
     ${!st.groups.length ? `<div class="card"><div class="empty"><span class="ic">${ic('cal', 30)}</span><h3>مفيش مجموعات لسه</h3><span class="sm">أضف مجموعة لكل مادة وحدد يومها وساعتها، والحصص هتظهر هنا كل أسبوع لوحدها.</span><a class="btn accent" href="#/groups">أضف مجموعة</a></div></div>` :
       showDays.map(d => {
         const list = by(d);
