@@ -395,3 +395,31 @@ window.homeGroupsHTML = () => {
       </a>`;
     }).join('')}</div></section>`;
 };
+
+/* ---------- تحويل طالب لمجموعة تانية من ملفه ---------- */
+ACT.moveStudent = el => {
+  const st = App.st, s = studentById(el.dataset.s);
+  if (!s) return;
+  const act = s.enrollments.filter(e => !e.endDate);
+  if (!act.length) return toast('الطالب مش مشترك في مواد دلوقتي', { type: 'warn' });
+  const rows = act.map(e => ({ e, g: E.groupById(st, E.currentGroupId(e)), others: st.groups.filter(x => x.subjectId === e.subjectId && x.id !== E.currentGroupId(e)) }));
+  const can = rows.filter(r => r.others.length);
+  if (can.length === 1 && rows.length === 1) return openTransfer([{ s, e: can[0].e }], E.currentGroupId(can[0].e));
+  const sh = sheet(`<h2>تحويل ${esc(s.name)}</h2>
+    <div class="banner blue">${ic('info', 18)}<span>كل مادة ليها مجموعاتها. اختار المادة اللي عايز تحوّلها — الحصص اللي حضرها وغيابه بيتنقلوا معاه، ويكمّل شهره من مكانه في المجموعة الجديدة.</span></div>
+    <div class="card tight" style="box-shadow:none;border:1px solid var(--line)">${rows.map(r => {
+      const P = E.cyclePosition(st, r.e, E.today());
+      return `<div class="list-row" style="gap:10px">
+        <span class="grow stack" style="gap:2px;min-width:0"><span class="b">${esc(E.SUBJ[r.e.subjectId].name)}</span>
+          <span class="small muted ellipsis">دلوقتي: ${esc(r.g ? E.groupLabel(st, r.g) : '—')} · شهره ${P.cycle || 1}: حصة ${P.pos} من 4</span></span>
+        ${r.others.length ? `<button class="btn sm" data-mv="${r.e.id}">${ic('users', 15)} تحويل</button>` : '<span class="small muted" style="max-width:110px;text-align:center">مفيش مجموعة تانية للمادة دي</span>'}
+      </div>`;
+    }).join('')}</div>
+    ${can.length ? '' : `<a class="btn ghost" href="#/groups" data-close>${ic('plus', 18)} أضف مجموعة تانية</a>`}
+    <button class="btn ghost" data-close>رجوع</button>`);
+  sh.el.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-mv]'); if (!b) return;
+    const e = s.enrollments.find(x => x.id === b.dataset.mv);
+    sh.close(); openTransfer([{ s, e }], E.currentGroupId(e));
+  });
+};

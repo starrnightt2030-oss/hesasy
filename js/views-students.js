@@ -93,7 +93,10 @@ Views.student = id => {
         <button class="btn" data-act="pay" data-s="${s.id}">${ic('plus', 18, 2.4)} تسجيل دفعة</button>
         ${s.phone ? `<button class="btn green" data-act="waStudent" data-s="${s.id}">${ic('chat', 18)} ولي الأمر</button>` : `<a class="btn ghost" href="#/student-edit/${s.id}">${ic('phone', 18)} أضف موبايل</a>`}
       </div>
-      <button class="btn soft sm" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب كامل — طباعة أو صورة</button>
+      <div class="grid2">
+        <button class="btn soft sm" data-act="moveStudent" data-s="${s.id}">${ic('users', 16)} تحويل لمجموعة تانية</button>
+        <button class="btn soft sm" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button>
+      </div>
     </section>
 
     <section style="display:flex;flex-direction:column;gap:10px">
