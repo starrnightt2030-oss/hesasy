@@ -109,3 +109,61 @@ Views.attlog = () => {
     }).join('')}</div>` : '<div class="card sm muted">مفيش تعديلات لسه</div>'}
   </main>`;
 };
+
+/* ---------- الحضور والغياب في ملف الطالب: كل حصصه، وتسجيل/تعديل من نفس المكان ---------- */
+window.studentAttHTML = s => {
+  const st = App.st, t = E.today();
+  const ens = s.enrollments.filter(e => e.startDate <= t);
+  if (!ens.length) return '';
+  const all = ens.map(e => {
+    const ses = E.enrollmentSessions(st, e, t);          // الحصص اللي معادها جه بس
+    return { e, list: ses.map((o, i) => ({ o, i, v: (st.attendance[o.key] || {})[s.id] || null })) };
+  });
+  const P = all.reduce((a, x) => a + x.list.filter(r => r.v === 'p').length, 0);
+  const A = all.reduce((a, x) => a + x.list.filter(r => r.v === 'a').length, 0);
+  const N = all.reduce((a, x) => a + x.list.filter(r => !r.v).length, 0);
+  const subF = App.ui.stAttSub && all.some(x => x.e.id === App.ui.stAttSub) ? App.ui.stAttSub : (all.length > 1 ? '' : all[0].e.id);
+  const N0 = all.reduce((a, x) => a + x.list.filter(r => !r.v).length, 0);
+  const onlyMissing = !!App.ui.stAttMiss && N0 > 0;   // لو مفيش ناقص يرجع يعرض الكل
+  const showAll = App.ui.stAttAll === s.id;
+  const rows = all.filter(x => !subF || x.e.id === subF);
+  const body = rows.map(({ e, list }) => {
+    let L = list.slice().reverse();
+    if (onlyMissing) L = L.filter(r => !r.v);
+    const months = [];
+    L.forEach(r => { const m = Math.floor(r.i / 4) + 1; let g = months.find(x => x.m === m); if (!g) months.push(g = { m, rows: [] }); g.rows.push(r); });
+    const vis = showAll || onlyMissing ? months : months.slice(0, 2);
+    if (!vis.length) return '';
+    return `${rows.length > 1 || all.length > 1 ? `<div class="label-sm" style="padding:10px 0 2px">${esc(E.SUBJ[e.subjectId].name)}</div>` : ''}
+      ${vis.map(g => `<div class="att-m"><span>شهره ${g.m}</span></div>${g.rows.map(({ o, i, v }) => {
+        const gr = E.groupById(st, o.groupId);
+        const moved = (e.groupHist || []).length > 1;
+        return `<div class="att-line ${v ? '' : 'miss'}">
+          <span class="stack grow" style="gap:1px;min-width:0"><span class="b sm">${E.fmtDate(o.date)}${o.type === 'makeup' ? ' <span class="chip blue">تعويضية</span>' : ''}</span>
+            <span class="small muted ellipsis">حصة ${(i % 4) + 1} من 4${moved && gr ? ' · ' + esc(gr.name || E.DAY_NAMES[E.currentSchedule(gr).day]) : ''}${v ? '' : ' · <b style="color:var(--red)">متسجلش</b>'}</span></span>
+          <div class="toggle2" role="group" aria-label="حضور ${E.fmtShort(o.date)}">
+            <button class="p ${v === 'p' ? 'on' : ''}" aria-pressed="${v === 'p'}" data-act="att" data-k="${esc(o.key)}" data-s="${s.id}" data-v="p">حاضر</button>
+            <button class="a ${v === 'a' ? 'on' : ''}" aria-pressed="${v === 'a'}" data-act="att" data-k="${esc(o.key)}" data-s="${s.id}" data-v="a">غائب</button></div>
+        </div>`;
+      }).join('')}`).join('')}
+      ${!showAll && !onlyMissing && months.length > 2 ? `<button class="btn sm soft block" style="margin:8px 0" data-act="stAttAll" data-s="${s.id}">عرض كل الحصص (${list.length})</button>` : ''}`;
+  }).join('');
+  return `<section id="st-att" style="display:flex;flex-direction:column;gap:10px">
+    <div class="sec-title"><h2>الحضور والغياب</h2></div>
+    <div class="grid3">
+      <div class="stat green" style="text-align:center"><span class="v">${P}</span><span class="k">حضر</span></div>
+      <div class="stat red" style="text-align:center"><span class="v">${A}</span><span class="k">غاب</span></div>
+      <div class="stat ${N ? 'amber' : 'green'}" style="text-align:center"><span class="v">${N}</span><span class="k">متسجلش</span></div>
+    </div>
+    ${N ? `<div class="banner red">${ic('alert', 18)}<span><b>${N} حصة متسجلش فيها حضور أو غياب.</b> سجّلها من هنا على طول — الحصة بتتحسب عليه في الحالتين.</span></div>` : ''}
+    <div class="chips">
+      ${all.length > 1 ? [['', 'كل المواد'], ...all.map(x => [x.e.id, E.SUBJ[x.e.subjectId].short])].map(([k, l]) => `<button class="fchip ${subF === k ? 'on' : ''}" data-act="stAttSub" data-e="${k}">${esc(l)}</button>`).join('') : ''}
+      ${N ? `<button class="fchip ${onlyMissing ? 'on' : ''}" data-act="stAttMiss" style="${onlyMissing ? '' : 'border-color:#F3C4C0;color:var(--red)'}">متسجلش بس (${N})</button>` : ''}
+    </div>
+    <div class="card tight">${body || '<div class="sm muted" style="padding:14px 0">لسه مفيش حصص اتعملت</div>'}</div>
+    <div class="small muted" style="padding:0 4px">${ic('info', 13)} تعديل حضور أو غياب متسجل في يوم فات بيطلب تأكيد وبيتسجل في سجل التعديلات.</div>
+  </section>`;
+};
+ACT.stAttSub = el => { App.ui.stAttSub = el.dataset.e; render(); };
+ACT.stAttMiss = () => { App.ui.stAttMiss = !App.ui.stAttMiss; render(); };
+ACT.stAttAll = el => { App.ui.stAttAll = el.dataset.s; render(); };

@@ -423,3 +423,11 @@ a.banner { color: inherit; }
 .ms b { font-size: 13px; height: 15px; } .ms i { font-style: normal; font-size: 10px; font-family: var(--display); }
 .ms.p { background: var(--green-soft); color: var(--green); } .ms.a { background: var(--red-soft); color: var(--red); } .ms.none { background: #EEF0F4; color: var(--muted-2); }
 .ms.future { border: 1.5px dashed var(--field); color: var(--muted); }
+
+/* ---------- حضور الطالب في ملفه ---------- */
+.att-m { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; font-size: 12px; font-weight: 700; color: var(--muted-2); }
+.att-m::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.att-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.att-line + .att-line { border-top: 1px solid var(--line-2); }
+.att-line.miss { background: #FFF6F5; margin: 0 -14px; padding: 8px 14px; }
+.att-line .toggle2 button { min-width: 50px; min-height: 36px; }

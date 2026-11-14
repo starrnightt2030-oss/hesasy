@@ -119,6 +119,8 @@ Views.student = id => {
       }).join('') : '<div class="sm muted" style="padding:14px 0">مفيش مواد</div>'}</div>
     </section>
 
+    ${studentAttHTML(s)}
+
     ${s.grade === 3 ? projectStudentSections(s) : ''}
     <section class="grid2">
       <div class="card stack" style="gap:4px"><span class="small muted">الحضور (من ${total} حصة)</span><span class="num b" style="font-size:22px">${pres + abs ? Math.round(pres / (pres + abs) * 100) + '٪' : '—'}</span><span class="small" style="color:${abs ? 'var(--red)' : 'var(--green)'};font-weight:600">${pres + abs ? 'حضر ' + pres + ' · غاب ' + abs : total ? 'لسه مفيش غياب متسجل' : 'لسه مفيش حصص'}</span></div>
