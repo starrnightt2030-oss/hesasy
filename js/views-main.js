@@ -195,6 +195,10 @@ Views.session = key => {
   const off = o.status !== 'normal';
   const mk = o.status === 'postponed' ? st.makeups.find(m => m.id === o.makeupId) : null;
   const future = o.date > E.today();
+  const link = off ? {} : linkedSessions(o, list);
+  // رقم حصة كل طالب في شهره، وأكتر رقم متكرر بين زمايله (علشان اللي ورا أو قدام يبان)
+  const posMap = new Map(list.map(({ student: s, enrollment: e }) => [s.id, E.cyclePosition(st, e, o.date, true)]));
+  const modeN = (() => { const c = new Map(); posMap.forEach(p => c.set(p.n, (c.get(p.n) || 0) + 1)); let best = 0, bn = 0; c.forEach((v, k) => { if (v > best || (v === best && k > bn)) { best = v; bn = k; } }); return bn; })();
   return `
   <header class="hero-head flat">
     <div class="row">
@@ -220,18 +224,25 @@ Views.session = key => {
     ${(() => { const c = E.groupCycles(st, g.id, E.today(), nowHM()).find(x => x.complete && x.sessions[x.sessions.length - 1].key === key); return c ? `<a class="banner green tap" href="#/group/${g.id}" data-act="openGroupCycle" data-g="${g.id}" data-n="${c.n}" style="text-decoration:none">${ic('check', 18)}<span><b>دي آخر حصة في الشهر ${c.n} للمجموعة.</b> افتح ملخص الشهر بالحضور والغياب لكل طالب ←</span></a>` : ''; })()}
     ${future ? `<div class="banner amber">${ic('clock', 18)}<span>الحصة دي لسه مجاتش — تقدر تأجلها أو تلغيها من دلوقتي.</span></div>` : ''}
     ${o.date < E.today() ? `<div class="banner ${list.some(x => !att[x.student.id]) ? 'red' : 'blue'}">${ic(list.some(x => !att[x.student.id]) ? 'alert' : 'lock', 18)}<span>حصة يوم فات${list.some(x => !att[x.student.id]) ? ` — <b>${list.filter(x => !att[x.student.id]).length} طالب متسجلش غيابهم</b>` : ''}. أي تعديل في غياب متسجل هيطلب تأكيد ويتسجل في سجل التعديلات.</span></div>` : ''}
+    ${link.next ? `<button class="link-card tap" data-act="copyAtt" data-from="${esc(key)}" data-to="${esc(link.next.o.key)}" ${Object.keys(att).length ? '' : 'disabled'}>
+      <span class="lc-ic">${ic('layers', 20)}</span><span class="grow stack" style="gap:2px"><span class="b">طبّق الغياب ده على ${esc(E.SUBJ[E.groupById(st, link.next.o.groupId).subjectId].name)}</span>
+      <span class="small">الساعة ${E.fmtTime(link.next.o.time)} · ${link.next.common} طالب نفس الطلاب${link.next.recorded ? ` · متسجل فيها ${link.next.recorded}` : ''}${Object.keys(att).length ? '' : ' · سجّل الأول هنا'}</span></span>${ic('chev', 18)}</button>` : ''}
+    ${link.prev && link.prev.marked && link.prev.missingHere ? `<button class="link-card tap alt" data-act="copyAtt" data-from="${esc(link.prev.o.key)}" data-to="${esc(key)}">
+      <span class="lc-ic">${ic('undo', 20)}</span><span class="grow stack" style="gap:2px"><span class="b">انسخ الغياب من ${esc(E.SUBJ[E.groupById(st, link.prev.o.groupId).subjectId].name)}</span>
+      <span class="small">الحصة اللي قبلها (${E.fmtTime(link.prev.o.time)}) · ${link.prev.missingHere} طالب لسه متسجلوش هنا</span></span>${ic('chev', 18)}</button>` : ''}
     <div class="row between"><span class="row small muted" style="gap:6px">${ic('info', 16)} الحصة بتتحسب حضر أو غاب</span>
       ${list.length ? `<button class="btn sm ghost" data-act="allPresent" data-k="${esc(key)}">الكل حاضر</button>` : ''}</div>
   </div>
   <ul style="list-style:none;margin:0;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
     ${list.length ? list.map(({ student: s, enrollment: e }) => {
       const v = att[s.id];
-      const pos = E.cyclePosition(st, e, o.date, true);
+      const pos = posMap.get(s.id);
       const L = App.C.ledgers.get(s.id);
-      return `<li class="att-row ${v === 'a' ? 'abs' : ''}">
+      const lag = modeN && list.length > 2 ? pos.n - modeN : 0;
+      return `<li class="att-row cy${(Math.max(1, pos.cycle) - 1) % 4} ${v === 'a' ? 'abs' : ''}">
         <a href="#/student/${s.id}" class="avatar ${v === 'a' ? 'red' : ''}" style="text-decoration:none" aria-label="ملف ${esc(s.name)}">${esc(initial(s.name))}</a>
         <div class="grow stack" style="gap:3px"><span class="b ellipsis">${esc(s.name)}</span>
-          <span class="small muted">حصة ${pos.pos || 1} من 4${pos.pos === 1 && pos.cycle > 1 ? ' · شهر جديد' : pos.pos === 4 ? ' · آخر حصة' : ''}${L && L.due > 0 ? ` · <b style="color:${L.late ? 'var(--red)' : 'var(--accent-text)'}">عليه ${money(L.due)}</b>` : ''}</span></div>
+          <span class="small muted"><span class="cy-tag">ش${pos.cycle}</span> حصة ${pos.pos || 1} من 4${pos.pos === 1 && pos.cycle > 1 ? ' · <b class="cy-new">شهر جديد</b>' : pos.pos === 4 ? ' · آخر حصة' : ''}${lag ? ` · <b style="color:${lag < 0 ? 'var(--red)' : 'var(--blue-text)'}">${lag < 0 ? 'ورا زمايله بـ' : 'قدام زمايله بـ'} ${Math.abs(lag) === 1 ? 'حصة' : Math.abs(lag) === 2 ? 'حصتين' : Math.abs(lag) + ' حصص'}</b>` : ''}${L && L.due > 0 ? ` · <b style="color:${L.late ? 'var(--red)' : 'var(--accent-text)'}">${L.partPaid ? 'باقي' : 'عليه'} ${money(L.due)}</b>` : ''}</span></div>
         <div class="toggle2" role="group" aria-label="حضور ${esc(s.name)}">
           <button class="p ${v === 'p' ? 'on' : ''}" aria-pressed="${v === 'p'}" data-act="att" data-k="${esc(key)}" data-s="${s.id}" data-v="p">حاضر</button>
           <button class="a ${v === 'a' ? 'on' : ''}" aria-pressed="${v === 'a'}" data-act="att" data-k="${esc(key)}" data-s="${s.id}" data-v="a">غائب</button></div></li>`;
@@ -245,6 +256,50 @@ Views.session = key => {
     </div>
     ${list.length ? `<div class="row small muted" style="justify-content:center;gap:6px">${ic('check', 14)} الغياب بيتحفظ أول ما تدوس</div>` : ''}
   </div>`}`;
+};
+/* الحصة اللي بعدها / قبلها في نفس اليوم لنفس الطلاب (زي مادتين ورا بعض يوم الأحد) */
+function linkedSessions(o, list) {
+  const st = App.st;
+  const ids = new Set(list.map(x => x.student.id));
+  const att = st.attendance[o.key] || {};
+  const day = E.sessionsOnDay(st, o.date).filter(x => x.status === 'normal' && x.key !== o.key);
+  const info = x => {
+    const other = E.studentsInSession(st, x).map(y => y.student.id);
+    const common = other.filter(id => ids.has(id));
+    const xa = st.attendance[x.key] || {};
+    return { o: x, common: common.length, recorded: common.filter(id => xa[id]).length, marked: common.filter(id => xa[id]).length, missingHere: common.filter(id => xa[id] && !att[id]).length };
+  };
+  const after = day.filter(x => x.time > o.time || (x.time === o.time && x.key > o.key)).map(info).filter(x => x.common);
+  const before = day.filter(x => x.time < o.time || (x.time === o.time && x.key < o.key)).map(info).filter(x => x.common);
+  return { next: after[0] || null, prev: before[before.length - 1] || null };
+}
+ACT.copyAtt = async el => {
+  const st = App.st, from = el.dataset.from, to = el.dataset.to;
+  const so = E.sessionByKey(st, from), so2 = E.sessionByKey(st, to);
+  if (!so || !so2) return;
+  const src = st.attendance[from] || {}, cur = st.attendance[to] || {};
+  const tgt = E.studentsInSession(st, so2).map(x => x.student.id);
+  const ids = tgt.filter(id => src[id]);
+  if (!ids.length) return toast('مفيش غياب متسجل للطلاب دول في الحصة الأولى', { type: 'warn' });
+  const conflicts = ids.filter(id => cur[id] && cur[id] !== src[id]);
+  let overwrite = false;
+  if (conflicts.length) overwrite = await confirmBox({ title: 'فيه طلاب متسجلين بشكل مختلف', icon: 'alert', ok: 'اكتب فوقهم', cancel: 'سيبهم زي ما هما',
+    text: `${conflicts.slice(0, 4).map(id => '<b>' + esc((studentById(id) || {}).name || '') + '</b>').join('، ')}${conflicts.length > 4 ? ' و' + (conflicts.length - 4) + ' كمان' : ''} متسجلين في الحصة التانية بشكل مختلف. تكتب فوقهم ولا تسيبهم؟` });
+  const past = so2.date < E.today();
+  const sub = E.SUBJ[E.groupById(st, so2.groupId).subjectId];
+  const extra = tgt.filter(id => !src[id] && !cur[id]).length;
+  let n = 0;
+  commit(S => {
+    S.attendance[to] = S.attendance[to] || {};
+    ids.forEach(id => {
+      const old = S.attendance[to][id];
+      if (old && !overwrite) return;
+      if (old === src[id]) return;
+      S.attendance[to][id] = src[id]; n++;
+      if (past && old && typeof logAtt === 'function') logAtt(S, to, id, old, src[id]);
+    });
+  }, null);
+  toast(`اتسجل غياب ${n} طالب في ${esc(sub.name)}${extra ? ` · ${extra} طالب فاضلين تسجلهم هناك` : ''}`, { sound: 'ok', action: 'افتحها', ms: 6000, onAction: () => go('session', to) });
 };
 ACT.openGroupCycle = el => { App.ui.grpId = el.dataset.g; App.ui.grpCycle = +el.dataset.n; App.ui.grpSel = null; go('group', el.dataset.g); };
 ACT.allPresent = el => {
@@ -318,9 +373,25 @@ ACT.editGroup = el => {
     <div class="grid2">${g ? `<button class="btn danger-ghost" id="gf-del">${ic('trash', 18)} حذف</button>` : '<button class="btn ghost" data-close>رجوع</button>'}<button class="btn" id="gf-ok">حفظ</button></div>`);
   const changed = () => g && (+$('#gf-d', s.el).value !== cur.day || $('#gf-t', s.el).value !== cur.time);
   ['#gf-d', '#gf-t'].forEach(q => $(q, s.el).addEventListener('change', () => { const w = $('#gf-from-w', s.el); if (w) w.hidden = !changed(); }));
-  $('#gf-ok', s.el).onclick = () => {
+  $('#gf-ok', s.el).onclick = async () => {
     const subjectId = $('#gf-s', s.el).value, name = $('#gf-n', s.el).value.trim(), day = +$('#gf-d', s.el).value, time = $('#gf-t', s.el).value;
     if (!time) return toast('حدد الساعة', { type: 'err', sound: 'err' });
+    // حماية: تغيير المعاد من تاريخ فات ممكن يخفي غياب متسجل في حصص قديمة
+    if (g && changed()) {
+      const from = $('#gf-from', s.el) ? $('#gf-from', s.el).value || E.today() : E.today();
+      let sched = g.schedule.filter(v => v.from < from);
+      sched = sched.length ? sched.concat({ from, day, time }) : [{ from: '2000-01-01', day, time }];
+      const tmp = Object.assign({}, st, { groups: st.groups.map(x => x.id === g.id ? Object.assign({}, x, { schedule: sched }) : x) });
+      const lost = Object.keys(st.attendance).filter(k => k.startsWith(g.id + '@') && Object.keys(st.attendance[k] || {}).length)
+        .map(k => k.split('@')[1]).filter(d => !E.occurrences(tmp, g.id, d, d).some(o => o.date === d));
+      if (lost.length) {
+        s.close();
+        const ok = await confirmBox({ title: 'غياب متسجل هيختفي!', danger: true, icon: 'alert', ok: 'أيوه، غيّر المعاد',
+          text: `تغيير المعاد من <b>${E.fmtDate(from)}</b> هيخلي <b>${lost.length} ${lost.length === 1 ? 'حصة' : 'حصص'}</b> متسجل غيابها (${lost.slice(0, 3).map(E.fmtShort).join('، ')}${lost.length > 3 ? '…' : ''}) متبقاش محسوبة، وعدد حصص الطلاب هيتغير. الأفضل تخلي التغيير يبدأ من النهارده أو من بعد آخر حصة.` });
+        if (!ok) return;
+        await Backup.add(st, 'قبل تغيير معاد مجموعة').catch(() => {});
+      }
+    }
     s.close();
     commit(st => {
       if (!g) {

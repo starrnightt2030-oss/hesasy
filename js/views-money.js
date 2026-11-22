@@ -226,7 +226,7 @@ ACT.repMode = el => { App.ui.repMode = el.dataset.m; render(); };
 /* ---------- اختيار معايير التقرير ---------- */
 ACT.report = async el => {
   const r = el.dataset.r, st = App.st;
-  if (!['schedule', 'attendance', 'groupMonth', 'students', 'projAtt', 'projQ'].includes(r) && !(await needReveal())) return;
+  if (!['schedule', 'attendance', 'groupMonth', 'students', 'projAtt', 'projQ', 'projGrades'].includes(r) && !(await needReveal())) return;
   const groupSel = (sel) => `<label class="field">المجموعة<select class="input select" id="rp-g">${st.groups.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(E.SUBJ[g.subjectId].name + ' · ' + E.groupLabel(st, g))}</option>`).join('')}</select></label>`;
   const monthSel = `<label class="field">الشهر<input class="input" type="month" id="rp-m" value="${E.today().slice(0, 7)}"></label>`;
   const termOpts = [...(st.settings.terms || []).map(t => `<option value="${t.id}">${esc(t.name)}</option>`), '<option value="year">السنة كاملة</option>', '<option value="month">شهر</option>'].join('');
@@ -245,10 +245,10 @@ ACT.report = async el => {
   else if (r === 'term') { title = 'تقرير الترم / السنة'; body = `<label class="field">الفترة<select class="input select" id="rp-p">${termOpts.replace('<option value="month">شهر</option>', '')}</select></label>`; }
   else if (r === 'project') { title = 'مستلزمات المشروع'; body = `<label class="field">البند<select class="input select" id="rp-i"><option value="">كل البنود</option>${st.projectItems.map(it => `<option value="${it.id}" ${it.id === el.dataset.i ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></label>`; }
   else if (r === 'student') { title = 'كشف حساب طالب'; body = `<label class="field">الطالب<select class="input select" id="rp-s">${st.students.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>`; }
-  else if (r === 'projAtt' || r === 'projQ') {
+  else if (r === 'projAtt' || r === 'projQ' || r === 'projGrades') {
     const gs = st.groups.filter(g => g.subjectId === 'g3a');
     if (!gs.length) return toast('مفيش مجموعات مشروع تخرج', { type: 'warn' });
-    title = r === 'projAtt' ? 'الغياب والخصومات' : 'تقييم الأسئلة';
+    title = r === 'projAtt' ? 'الغياب والخصومات' : r === 'projGrades' ? 'كشف الدرجات الشهري' : 'تقييم الأسئلة';
     body = `<label class="field">المجموعة<select class="input select" id="rp-g"><option value="">كل المجموعات</option>${gs.map(g => `<option value="${g.id}" ${g.id === App.ui.projGroup ? 'selected' : ''}>${esc(E.groupLabel(st, g))}</option>`).join('')}</select></label>`;
     if (r === 'projQ' && el.dataset.q) body += `<input type="hidden" id="rp-q" value="${el.dataset.q}">`;
   }
@@ -329,7 +329,7 @@ const Print = {
     doPrint('كشف المتأخرات', list.length + ' طالب عليهم فلوس',
       `<div class="boxes"><div>متأخر (شهر وبدأ التاني)<b class="red">${f0(T.late)} ج</b></div><div>الشهر الحالي<b>${f0(T.cur)} ج</b></div><div>الإجمالي<b class="red">${f0(T.due)} ج</b></div></div>
       <table><thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>المواد اللي عليها</th><th>متأخر</th><th>الحالي</th><th>الإجمالي</th><th>موبايل</th></tr></thead><tbody>
-      ${list.map((L, i) => `<tr>${td(i + 1, 'c')}${td(esc(L.student.name))}${td(E.GRADES[L.student.grade])}${td(esc([...new Set(L.charges.filter(c => c.due > 0).map(c => E.SUBJ[c.subjectId].short))].join('، ')))}${td(f0(L.late), L.late ? 'red' : '')}${td(f0(L.current))}${td(f0(L.due), 'red')}${td(esc(L.student.phone || ''))}</tr>`).join('')}</tbody>
+      ${list.map((L, i) => `<tr>${td(i + 1, 'c')}${td(esc(L.student.name))}${td(E.GRADES[L.student.grade])}${td(esc([...new Set(L.bills.filter(c => c.due > 0).map(E.billShort))].join('، ')))}${td(f0(L.late), L.late ? 'red' : '')}${td(f0(L.current))}${td(f0(L.due), 'red')}${td(esc(L.student.phone || ''))}</tr>`).join('')}</tbody>
       <tfoot><tr>${td('')}${td('الإجمالي')}${td('')}${td('')}${td(f0(T.late))}${td(f0(T.cur))}${td(f0(T.due))}${td('')}</tr></tfoot></table>`);
   },
   schedule() {

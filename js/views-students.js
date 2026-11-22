@@ -4,8 +4,8 @@
 function statusChip(L) {
   const s = L.student;
   if (s.status === 'withdrawn' && L.due <= 0) return '<span class="chip gray">منسحب</span>';
-  if (L.late > 0) return `<span class="chip red">متأخر ${money(L.due)}</span>`;
-  if (L.current > 0) return `<span class="chip amber">عليه ${money(L.due)}</span>`;
+  if (L.late > 0) return `<span class="chip red">${L.partPaid ? 'دفع جزء · ' : 'متأخر '}${money(L.due)}</span>`;
+  if (L.current > 0) return `<span class="chip amber">${L.partPaid ? 'دفع جزء · باقي ' : 'عليه '}${money(L.due)}</span>`;
   if (L.credit > 0) return `<span class="chip blue">ليه ${money(L.credit)}</span>`;
   return '<span class="chip green">خالص</span>';
 }
@@ -21,9 +21,10 @@ function studentsListHTML() {
   if (f === 'g1' || f === 'g2' || f === 'g3') list = list.filter(L => L.student.grade === +f[1] && L.student.status !== 'withdrawn');
   else if (f === 'owe') list = list.filter(L => L.due > 0);
   else if (f === 'late') list = list.filter(L => L.late > 0);
+  else if (f === 'part') list = list.filter(L => L.partPaid && L.due > 0);
   else if (f === 'out') list = list.filter(L => L.student.status === 'withdrawn');
   else list = list.filter(L => L.student.status !== 'withdrawn');
-  list.sort((a, b) => f === 'owe' || f === 'late' ? b.due - a.due : a.student.name.localeCompare(b.student.name, 'ar'));
+  list.sort((a, b) => f === 'owe' || f === 'late' || f === 'part' ? b.due - a.due : a.student.name.localeCompare(b.student.name, 'ar'));
   if (!list.length) return `<div class="card"><div class="empty"><span class="ic">${ic('users', 28)}</span><h3>${st.students.length ? 'مفيش نتايج' : 'مفيش طلاب لسه'}</h3>${st.students.length ? '' : `<a class="btn accent" href="#/student-new">${ic('plus', 18)} أضف أول طالب</a>`}</div></div>`;
   return `<div class="small muted" style="padding:0 4px">${list.length} طالب</div><div class="card tight">${list.map(L => {
     const s = L.student;
@@ -38,7 +39,7 @@ Views.students = () => {
   const f = App.ui.stuFilter || 'all';
   const C = App.C;
   const ledgers = [...C.ledgers.values()];
-  const chips = [['all', 'الكل'], ['g1', 'الأول'], ['g2', 'الثاني'], ['g3', 'الثالث'], ['owe', 'عليهم فلوس (' + ledgers.filter(L => L.due > 0).length + ')'], ['late', 'متأخرين (' + ledgers.filter(L => L.late > 0).length + ')'], ['out', 'منسحبين']];
+  const chips = [['all', 'الكل'], ['g1', 'الأول'], ['g2', 'الثاني'], ['g3', 'الثالث'], ['owe', 'عليهم فلوس (' + ledgers.filter(L => L.due > 0).length + ')'], ['late', 'متأخرين (' + ledgers.filter(L => L.late > 0).length + ')'], ['part', 'دفعوا جزء (' + ledgers.filter(L => L.partPaid && L.due > 0).length + ')'], ['out', 'منسحبين']];
   return `
   <header class="hero-head flat">
     <div class="topbar"><div class="stack"><h1 style="font-size:22px">الطلاب</h1><span class="sub">${App.st.students.filter(s => s.status !== 'withdrawn').length} طالب مشترك</span></div>
@@ -63,7 +64,7 @@ Views.student = id => {
   const t = E.today();
   const act = activeEnrollments(s, t);
   const mt = E.monthlyTotal(st, s.grade, act.map(e => e.subjectId));
-  const unpaid = L.charges.filter(c => c.due > 0);
+  const unpaid = L.bills.filter(b => b.due > 0);
   const term = E.termOf(st, t);
   const termPaid = term ? L.payments.filter(p => p.date >= term.start && p.date <= term.end && p.kind !== 'discount').reduce((a, p) => a + +p.amount, 0) : L.paid;
   let pres = 0, abs = 0, total = 0;
@@ -86,9 +87,11 @@ Views.student = id => {
           <span class="money-big" style="color:${L.due > 0 ? 'var(--red)' : 'var(--green)'}">${L.due > 0 ? money(L.due) : L.credit > 0 ? money(L.credit) : 'خالص'}</span></div>
         ${L.late > 0 ? '<span class="chip red">عليه شهر وبدأ التاني</span>' : L.current > 0 ? '<span class="chip amber">عليه الشهر الحالي</span>' : '<span class="chip green">مفيش عليه</span>'}
       </div>
-      ${unpaid.length ? `<div style="display:flex;flex-direction:column;gap:8px">${unpaid.map(c => `
-        <div class="row between sm" style="padding:10px 12px;border-radius:12px;background:${c.latest ? '#F6F8FA' : '#FDF3F2'}">
-          <span>${esc(E.SUBJ[c.subjectId].name)} · ${c.partial ? 'آخر دورة (' + c.held + ' حصص)' : 'دورة ' + c.cycle} <span class="muted small">من ${E.fmtShort(c.date)}</span></span><span class="b num">${money(c.due)}</span></div>`).join('')}</div>` : ''}
+      ${unpaid.length ? `<div style="display:flex;flex-direction:column;gap:8px">${unpaid.map(b => `
+        <div class="bill-row ${b.latest ? '' : 'late'}">
+          <span class="stack" style="gap:2px;min-width:0"><span class="b">${esc(E.billLabel(b))} · ${b.partial ? 'آخر شهر (' + b.held + ' حصص)' : 'الشهر ' + b.cycle}</span>
+            <span class="small muted">من ${E.fmtShort(b.date)}${b.paid > 0 ? ` · <b style="color:var(--green-text)">دفع ${money(b.paid)} من ${money(b.amount)}</b>` : ` · ${money(b.amount)}`}${b.kind === 'bundle' ? ' · ' + b.parts.map(c => E.SUBJ[c.subjectId].short).join('، ') : ''}</span></span>
+          <span class="b num" style="color:${b.latest ? 'var(--accent-text)' : 'var(--red)'}">${money(b.due)}</span></div>`).join('')}</div>` : ''}
       <div class="grid2">
         <button class="btn" data-act="pay" data-s="${s.id}">${ic('plus', 18, 2.4)} تسجيل دفعة</button>
         ${s.phone ? `<button class="btn green" data-act="waStudent" data-s="${s.id}">${ic('chat', 18)} ولي الأمر</button>` : `<a class="btn ghost" href="#/student-edit/${s.id}">${ic('phone', 18)} أضف موبايل</a>`}
@@ -111,6 +114,7 @@ Views.student = id => {
         let chip = '';
         if (ended || e.endDate) chip = `<span class="chip gray">منسحب ${E.fmtShort(e.endDate)}</span>`;
         else if (notYet) chip = `<span class="chip blue">يبدأ ${E.fmtShort(e.startDate)}</span>`;
+        else if (lastC && lastC.billId && lastC.billId.startsWith('b:')) { const b = L.bills.find(x => x.id === lastC.billId); chip = `<span class="chip ${cs.some(c => c.due > 0) ? (cs.some(c => !c.latest && c.due > 0) ? 'red' : 'amber') : 'green'}">ضمن العرض${b && b.due > 0 ? '' : ' · مدفوع'}</span>`; }
         else if (lastC && lastC.due > 0) chip = `<span class="chip ${cs.some(c => !c.latest && c.due > 0) ? 'red' : 'amber'}">${pos.pos === 1 && pos.cycle > 1 ? 'دورة جديدة · ' : ''}عليه ${money(cs.reduce((a, c) => a + c.due, 0))}</span>`;
         else chip = '<span class="chip green">مدفوعة</span>';
         return `<div style="padding:12px 0;display:flex;flex-direction:column;gap:8px;${e.endDate ? 'opacity:.7' : ''}">
@@ -132,10 +136,10 @@ Views.student = id => {
 
     <section style="display:flex;flex-direction:column;gap:10px">
       <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button></div>
-      <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.charges.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
+      <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.bills.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
         <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة · ' + E.payLabel(x.p)}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
           <span class="num b" style="color:var(--green)">+${money(x.p.amount)}</span><button class="icon-btn light" style="width:36px;height:36px" data-act="delPay" data-p="${x.p.id}" aria-label="حذف الدفعة">${ic('x', 16)}</button></div>` : `
-        <div class="list-row"><span class="avatar ${x.c.due > 0 ? (x.c.latest ? 'amber' : 'red') : ''}" style="width:34px;height:34px">${ic('cal', 16)}</span><span class="grow stack"><span class="sm b">${esc(E.SUBJ[x.c.subjectId].short)} · ${x.c.partial ? 'دورة ناقصة (' + x.c.held + ' حصص)' : 'دورة ' + x.c.cycle}${x.c.bundle ? ' · عرض' : ''}</span><span class="small muted">${E.fmtDate(x.c.date)}${x.c.due > 0 ? ' · باقي ' + money(x.c.due) : ' · مدفوعة'}</span></span>
+        <div class="list-row"><span class="avatar ${x.c.due > 0 ? (x.c.latest ? 'amber' : 'red') : ''}" style="width:34px;height:34px">${ic('cal', 16)}</span><span class="grow stack"><span class="sm b">${esc(E.billShort(x.c))} · ${x.c.partial ? 'شهر ناقص (' + x.c.held + ' حصص)' : 'الشهر ' + x.c.cycle}${x.c.kind !== 'bundle' && x.c.parts[0].bundle ? ' · عرض' : ''}</span><span class="small muted">${E.fmtDate(x.c.date)}${x.c.due > 0 ? (x.c.paid > 0 ? ' · دفع ' + money(x.c.paid) + ' · باقي ' + money(x.c.due) : ' · باقي ' + money(x.c.due)) : ' · مدفوعة'}</span></span>
           <span class="num b">${money(x.c.amount)}</span></div>`).join('') || '<div class="sm muted" style="padding:14px 0">لسه مفيش حاجة</div>'}</div>
     </section>
 
@@ -158,7 +162,7 @@ ACT.pay = el => {
     <div class="seg" id="pk"><button class="on" data-k="cash">دفعة فلوس</button><button data-k="discount">خصم / إعفاء</button></div>
     <div class="field" id="pm-w">طريقة الدفع<div class="grid3" id="pm">${Object.entries(E.METHODS).map(([k, l]) => `<button type="button" class="btn ${k === (localStorage.getItem('hesasy-method') || 'cash') ? '' : 'ghost'}" data-m="${k}" aria-pressed="${k === (localStorage.getItem('hesasy-method') || 'cash')}" style="min-height:52px;flex-direction:column;gap:2px;font-size:13px;padding:0 4px">${ic(k === 'cash' ? 'wallet' : k === 'instapay' ? 'bolt' : 'phone', 18)}${l}</button>`).join('')}</div></div>
     <label class="field">المبلغ<input class="input num" type="number" inputmode="numeric" id="pa" value="${shown() && L.due > 0 ? L.due : ''}" placeholder="0" style="font-size:22px;font-weight:700" autofocus></label>
-    ${L.due > 0 && shown() ? `<div class="chips">${[...new Set([L.due, L.late, L.current, 250, 175].filter(v => v > 0 && v <= L.due))].map(v => `<button class="fchip" data-v="${v}">${fmt(v)}</button>`).join('')}</div>` : ''}
+    ${L.due > 0 && shown() ? `<div class="chips">${[...new Set([L.due, L.late, L.current, ...L.bills.filter(b => b.due > 0).map(b => b.due), 250].filter(v => v > 0 && v <= L.due))].slice(0, 6).map(v => `<button class="fchip" data-v="${v}">${fmt(v)}</button>`).join('')}</div>` : ''}
     <div class="grid2"><label class="field">التاريخ<input class="input" type="date" id="pd" value="${E.today()}"></label><label class="field">ملاحظة<input class="input" id="pn" placeholder="اختياري"></label></div>
     <button class="btn lg" id="pok">${ic('check', 20, 2.4)} حفظ الدفعة</button>`);
   let kind = 'cash', method = localStorage.getItem('hesasy-method') || 'cash';
@@ -184,7 +188,7 @@ ACT.delPay = async el => {
 };
 ACT.waStudent = el => {
   const s = studentById(el.dataset.s), L = App.C.ledgers.get(s.id);
-  const lines = L.charges.filter(c => c.due > 0).map(c => `• ${E.SUBJ[c.subjectId].name} (من ${E.fmtShort(c.date)}): ${fmt(c.due)} جنيه`);
+  const lines = L.bills.filter(b => b.due > 0).map(b => `• ${E.billLabel(b)} — الشهر ${b.cycle} (من ${E.fmtShort(b.date)}): ${fmt(b.due)} جنيه${b.paid > 0 ? ' (اتدفع ' + fmt(b.paid) + ' من ' + fmt(b.amount) + ')' : ''}`);
   const msg = L.due > 0 ? `السلام عليكم ورحمة الله\nبنفكر حضرتك بمصاريف حصص الطالب ${s.name}:\n${lines.join('\n')}\nالإجمالي: ${fmt(L.due)} جنيه\nوشكرًا لحضرتك 🌷` : `السلام عليكم ورحمة الله\nحساب الطالب ${s.name} خالص ✅\nشكرًا لحضرتك 🌷`;
   window.open(waLink(s.phone, msg), '_blank');
 };

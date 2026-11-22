@@ -431,3 +431,61 @@ a.banner { color: inherit; }
 .att-line + .att-line { border-top: 1px solid var(--line-2); }
 .att-line.miss { background: #FFF6F5; margin: 0 -14px; padding: 8px 14px; }
 .att-line .toggle2 button { min-width: 50px; min-height: 36px; }
+
+/* ---------- v2.3: ألوان الشهور (كل شهر جديد لون مختلف) ---------- */
+.cy0 { --cy: #2563EB; --cy-soft: #EEF4FF; }
+.cy1 { --cy: #7C3AED; --cy-soft: #F4EFFF; }
+.cy2 { --cy: #0F9488; --cy-soft: #E9F8F6; }
+.cy3 { --cy: #C2410C; --cy-soft: #FFF2EA; }
+.att-row[class*="cy"] { border-inline-start: 5px solid var(--cy); background: linear-gradient(90deg, #fff 70%, var(--cy-soft)); }
+.att-row.abs[class*="cy"] { border-color: #F3C4C0; border-inline-start-color: var(--cy); }
+.mrow.tint { border-inline-start: 4px solid var(--cy); padding-inline-start: 10px; margin-inline-start: -4px; }
+.cy-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 20px; padding: 0 6px; border-radius: 6px; background: var(--cy, var(--line-2)); color: #fff; font-weight: 700; font-size: 11.5px; vertical-align: 1px; }
+.cy-new { color: var(--cy, var(--accent-text)); }
+
+/* ---------- نقل الغياب للحصة اللي بعدها ---------- */
+.link-card { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--blue-soft); color: var(--blue-text); cursor: pointer; border: 1.5px dashed #B9CCF5; }
+.link-card .b { color: var(--ink); }
+.link-card .lc-ic { width: 40px; height: 40px; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.link-card.alt { background: #F4EFFF; color: #5B21B6; border-color: #D9C8FB; }
+.link-card[disabled] { opacity: .55; cursor: default; }
+
+/* ---------- مواعيد التأخير ---------- */
+.tiers-line { display: flex; flex-wrap: wrap; gap: 6px; }
+.tier { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-text); }
+.tier.ok { background: var(--green-soft); color: var(--green-text); }
+.tier.bad { background: var(--red-soft); color: var(--red); }
+.tier-row { display: grid; grid-template-columns: 1.4fr 1fr auto; gap: 8px; align-items: end; }
+.field.sm { font-size: 12.5px; gap: 4px; }
+
+/* ---------- خطة الدرجات (حضور + أسئلة = ١٠٠) ---------- */
+.plan { background: #fff; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-sm); border: 1.5px solid var(--line-2); }
+.plan.over { border-color: #F3C4C0; }
+.plan-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--line-2); gap: 2px; }
+.plan-bar .att, .lg.att { background: var(--green); }
+.plan-bar .q, .lg.q { background: var(--blue); }
+.plan-bar .rest { background: repeating-linear-gradient(45deg, #E3E7EE 0 6px, #F3F5F8 6px 12px); }
+.lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; }
+
+/* ---------- درجة الطالب ---------- */
+.score-ring { --p: 0; --c: var(--green); width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(closest-side, #fff 78%, transparent 80% 100%), conic-gradient(var(--c) calc(var(--p) * 1%), var(--line-2) 0); }
+.score-ring b { font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
+.score-ring i { font-style: normal; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.score-ring.lg { width: 96px; height: 96px; }
+.score-ring.lg b { font-size: 26px; }
+.score-card { display: flex; flex-direction: column; gap: 10px; }
+.srow { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.srow .bar { height: 8px; }
+.srow .bar > span { background: var(--blue); }
+.srow .bar.green > span { background: var(--green); }
+.mgrade { padding: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+.card.tight .mgrade + .mgrade { border-top: 1px solid var(--line-2); }
+.mg-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; }
+.mg-line > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.mg-line b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mg-line.total { border-top: 1px dashed var(--line); padding-top: 6px; color: var(--muted); }
+
+/* ---------- فواتير الطالب ---------- */
+.bill-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #F6F8FA; font-size: 14px; }
+.bill-row.late { background: #FDF3F2; }

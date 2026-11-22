@@ -2,7 +2,8 @@
 (function (root) {
   'use strict';
   const DB_NAME = 'hesasy';
-  const KEEP = 5;
+  const KEEP = 5;            // نسخ الفولدر / الملفات
+  const KEEP_DAILY = 7, KEEP_OTHER = 8; // النسخ الداخلية: آخر ٧ أيام + آخر ٨ نسخ قبل/بعد العمليات
   let dbp = null;
 
   function db() {
@@ -22,25 +23,50 @@
   const reqP = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 
   async function kvGet(k) { const d = await db(); return reqP(d.transaction('kv').objectStore('kv').get(k)); }
-  async function kvSet(k, v) { const d = await db(); const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+  async function kvSet(k, v) {
+    const d = await db(); const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k);
+    return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('abort')); });
+  }
   async function kvDel(k) { const d = await db(); const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); return new Promise(res => { t.oncomplete = res; }); }
 
   /* ---------- البيانات ---------- */
-  let saveTimer = null, pending = null;
+  /* كل حفظ بيتختم بوقته (_savedAt). لو IndexedDB فشلت مرة والحفظ راح localStorage،
+   * التحميل بياخد الأحدث فيهم — علشان نسخة قديمة متغطيش على تعديلات أحدث.
+   * لو التحميل نفسه فشل، الحفظ بيتقفل (Store.blocked) علشان منكتبش بيانات فاضية فوق القديمة. */
+  let saveTimer = null, pending = null, failCount = 0;
+  const lsGet = () => { try { const s = localStorage.getItem('hesasy-state'); return s ? JSON.parse(s) : null; } catch (e) { return null; } };
+  const stamp = x => (x && x._savedAt) || '';
   const Store = {
+    blocked: false, lastError: null, lastOk: null,
     async load() {
-      try { return await kvGet('state'); } catch (e) { const s = localStorage.getItem('hesasy-state'); return s ? JSON.parse(s) : null; }
+      let kv = null, kvErr = null;
+      try { kv = await kvGet('state'); } catch (e) { kvErr = e; }
+      const ls = lsGet();
+      if (kvErr && !ls) { const er = new Error('LOAD_FAILED'); er.cause = kvErr; throw er; }
+      if (!kv) return ls || null;
+      if (ls && stamp(ls) > stamp(kv)) return ls;
+      return kv;
     },
     save(state) {
+      if (Store.blocked) return;
       pending = state;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => Store.flush(), 250);
     },
     async flush() {
-      if (!pending) return;
+      if (!pending || Store.blocked) return;
+      pending._savedAt = new Date().toISOString();
       const s = JSON.parse(JSON.stringify(pending));
       pending = null;
-      try { await kvSet('state', s); } catch (e) { localStorage.setItem('hesasy-state', JSON.stringify(s)); }
+      try {
+        await kvSet('state', s);
+        failCount = 0; Store.lastOk = s._savedAt; Store.lastError = null;
+        try { if (localStorage.getItem('hesasy-state')) localStorage.removeItem('hesasy-state'); } catch (e) {}
+      } catch (e) {
+        failCount++; Store.lastError = e;
+        try { localStorage.setItem('hesasy-state', JSON.stringify(s)); Store.lastOk = s._savedAt; }
+        catch (e2) { if (window.onStoreFail) window.onStoreFail(e2); }
+      }
     },
     async persist() { try { if (navigator.storage && navigator.storage.persist) return await navigator.storage.persist(); } catch (e) {} return false; },
     async wipeData() { await kvDel('state'); },
@@ -107,11 +133,11 @@
   };
 
   const Backup = {
-    KEEP, pack, fileName,
+    KEEP, KEEP_DAILY, pack, fileName,
     async list() {
       const d = await db();
       const all = await reqP(d.transaction('backups').objectStore('backups').getAll());
-      return all.sort((a, b) => b.at.localeCompare(a.at)).map(b => ({ id: b.id, at: b.at, reason: b.reason, students: (b.data.students || []).length }));
+      return all.sort((a, b) => b.at.localeCompare(a.at)).map(b => ({ id: b.id, at: b.at, reason: b.reason, students: (b.data.students || []).length, groups: (b.data.groups || []).length }));
     },
     async get(id) { const d = await db(); return reqP(d.transaction('backups').objectStore('backups').get(id)); },
     async add(state, reason) {
@@ -125,7 +151,13 @@
       const d = await db();
       const all = await reqP(d.transaction('backups').objectStore('backups').getAll());
       all.sort((a, b) => b.at.localeCompare(a.at));
-      const drop = all.slice(KEEP);
+      // النسخ الفاضية مش بتزق نسخة فيها بيانات برّه
+      const has = b => b.data && ((b.data.students || []).length || (b.data.groups || []).length);
+      const daily = all.filter(b => b.reason === 'تلقائي يومي'), other = all.filter(b => b.reason !== 'تلقائي يومي');
+      const keepIds = new Set([...daily.filter(has).slice(0, KEEP_DAILY), ...other.filter(has).slice(0, KEEP_OTHER)].map(b => b.id));
+      // دايمًا سيب آخر نسخة فيها بيانات حتى لو قديمة
+      const lastGood = all.find(has); if (lastGood) keepIds.add(lastGood.id);
+      const drop = all.filter(b => !keepIds.has(b.id));
       if (!drop.length) return;
       const t = d.transaction('backups', 'readwrite');
       drop.forEach(b => t.objectStore('backups').delete(b.id));

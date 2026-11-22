@@ -42,6 +42,15 @@
     async list(sub) {
       try { const r = await FS.readdir({ path: ROOT + (sub ? '/' + sub : ''), directory: DOCS }); return r.files.map(f => typeof f === 'string' ? f : f.name); } catch (e) { return []; }
     },
+    async read(path) { const r = await FS.readFile({ path: ROOT + '/' + path, directory: DOCS, encoding: 'utf8' }); return typeof r.data === 'string' ? r.data : await r.data.text(); },
+    /* أحدث نسخة في Documents/Hesasy (آخر حفظ أو النسخ اليومية) — للاسترجاع لو البيانات اختفت */
+    async readLatestBackup() {
+      const names = [...(await Native.list()).filter(n => /^hesasy-latest-.*\.json$/.test(n)),
+        ...(await Native.list('backups')).filter(n => /^hesasy-backup-.*\.json$/.test(n)).sort().reverse().slice(0, 2).map(n => 'backups/' + n)];
+      let best = null;
+      for (const n of names) { try { const j = JSON.parse(await Native.read(n)); if (j && j.app === 'hesasy' && j.data && (!best || (j.at || '') > (best.at || ''))) best = j; } catch (e) {} }
+      return best;
+    },
     async remove(path) { try { await FS.deleteFile({ path: ROOT + '/' + path, directory: DOCS }); } catch (e) {} }
   };
 
@@ -91,8 +100,8 @@
     const name = fname('hesasy-backup-');
     await Native.save(new Blob([pack(st, 'تلقائي يومي')], { type: 'application/json' }), name, 'backups');
     const names = (await Native.list('backups')).filter(n => /^hesasy-backup-.*\.json$/.test(n)).sort().reverse();
-    for (const n of names.slice(Backup.KEEP)) await Native.remove('backups/' + n);
-    return { ok: true, folder: Native.folder + '/backups', kept: Math.min(names.length, Backup.KEEP) };
+    for (const n of names.slice(14)) await Native.remove('backups/' + n);   // آخر ١٤ يوم في ذاكرة الموبايل
+    return { ok: true, folder: Native.folder + '/backups', kept: Math.min(names.length, 14) };
   };
   // نسخة "آخر حفظ" بعد كل تعديل (بعد ٣ ثواني من آخر تغيير)
   let latestT = null, latestOk = null;
@@ -163,6 +172,33 @@
               schedule: { at, allowWhileIdle: true }, smallIcon: 'ic_stat_hesasy', iconColor: '#E8962E', extra: { hash: '#/home' } });
         }
       }
+      // الغياب اللي متسجلش: إشعار بعد كل حصة بساعة ونص لو لسه مش متسجل (بيتلغي لوحده أول ما تسجل، لأن الجدولة بتتعاد بعد كل حفظ)
+      if (R.missing !== false) {
+        const miss = [];
+        for (let i = -1; i < 7; i++) {
+          const d = E.addDays(E.today(), i);
+          E.sessionsOnDay(st, d).filter(o => o.status === 'normal').forEach(o => {
+            const studs = E.studentsInSession(st, o); if (!studs.length) return;
+            const a = st.attendance[o.key] || {};
+            const left = studs.filter(x => !a[x.student.id]).length; if (!left) return;
+            const [y, m, dd] = d.split('-').map(Number), [h, mi] = o.time.split(':').map(Number);
+            const at = new Date(y, m - 1, dd, h, mi + 90);
+            if (at.getTime() <= now + 30000) return;
+            const g = E.groupById(st, o.groupId), sub = E.SUBJ[g.subjectId];
+            miss.push({ id: id++, title: 'سجّلت غياب ' + sub.name + '؟', body: left + ' طالب لسه من غير حضور أو غياب · ' + E.fmtTime(o.time) + ' — اضغط وسجّل',
+              schedule: { at, allowWhileIdle: true }, smallIcon: 'ic_stat_hesasy', iconColor: '#B42318', extra: { hash: '#/session/' + encodeURIComponent(o.key) } });
+          });
+        }
+        // تذكير بالليل لو فيه حصص فاتت ناقصها غياب
+        const M = App.miss && App.miss.count;
+        if (M) {
+          const t = new Date(); t.setHours(21, 30, 0, 0);
+          if (t.getTime() <= now + 30000) t.setDate(t.getDate() + 1);
+          miss.push({ id: id++, title: 'فيه ' + App.miss.count + ' غياب متسجلش', body: 'في ' + App.miss.sessions.length + ' حصة فاتت — افتح وسجلهم قبل ما تنساهم', schedule: { at: t, allowWhileIdle: true }, smallIcon: 'ic_stat_hesasy', iconColor: '#B42318', extra: { hash: '#/missing' } });
+        }
+        list.push(...miss);
+      }
+      list.sort((a, b) => a.schedule.at - b.schedule.at);
       if (list.length) await LN.schedule({ notifications: list.slice(0, 60) });
     } catch (e) { console.warn('notif', e); }
   }
