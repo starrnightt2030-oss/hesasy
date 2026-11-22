@@ -419,7 +419,7 @@
   }
 
   /* ---------- مشروع التخرج: خصم الغياب وتقييم الأسئلة ---------- */
-  const PROJ_DEFAULT = { steps: [5, 10, 15, 20], forgive: true, lateDays: 7, lateWeek: 25, lateAfter: 50, maxQ: 10, attMax: 40, total: 100 };
+  const PROJ_DEFAULT = { steps: [5, 10, 15, 20], forgive: true, lateDays: 7, lateWeek: 25, lateAfter: 50, maxQ: 10, total: 100 };
   const projRules = st => Object.assign({}, PROJ_DEFAULT, (st.settings && st.settings.project) || {});
   const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
   const round2 = n => Math.round(n * 100) / 100;
@@ -509,7 +509,7 @@
   }
 
   /* ---------- درجات مشروع التخرج من ١٠٠ ----------
-   * درجة الحضور (attMax) بيتخصم منها خصم الغياب كل شهر، + درجات الأسئلة بعد خصم التأخير.
+   * الدرجة = مجموع درجات الأسئلة بعد خصم التأخير − خصم الغياب كل شهر (حسب نسب الغياب في الإعدادات).
    * كل سؤال بيتحسب في الشهر اللي ميعاد تسليمه جواه (الشهر = ٤ حصص محسوبة). */
   function projectReport(st, s, asOf) {
     asOf = asOf || today();
@@ -526,8 +526,7 @@
     }
     let lost = 0;
     months.forEach(m => {
-      const room = Math.max(0, R.attMax - lost);
-      m.attLost = Math.min(room, m.deduction);           // درجة الحضور مش بتنزل تحت الصفر
+      m.attLost = m.deduction;
       lost += m.attLost;
       m.qGot = round2(m.qs.reduce((a, x) => a + (x.res ? x.res.final : 0), 0));
       m.qMax = m.qs.reduce((a, x) => a + (+x.q.max || R.maxQ), 0);
@@ -537,15 +536,14 @@
     });
     const qMax = qs.reduce((a, x) => a + (+x.q.max || R.maxQ), 0);
     const qGot = round2(qs.reduce((a, x) => a + (x.res ? x.res.final : 0), 0));
-    const attScore = Math.max(0, R.attMax - lost);
-    return { months, qs, attMax: R.attMax, attLost: lost, attScore, qMax, qGot, total: round2(attScore + qGot), outOf: R.attMax + qMax, target: R.total || 100 };
+    return { months, qs, attLost: lost, qMax, qGot, total: round2(Math.max(0, qGot - lost)), outOf: qMax, target: R.total || 100 };
   }
-  /* مجموع درجات كل الأسئلة المقررة على مجموعة (أو الكل) + الحضور، علشان نتأكد إنه ١٠٠ */
+  /* مجموع درجات كل الأسئلة المقررة على مجموعة (أو الكل)، علشان نتأكد إنه ١٠٠ */
   function projectPlan(st, gid) {
     const R = projRules(st);
     const qs = (st.questions || []).filter(q => !gid || !q.groupIds || !q.groupIds.length || q.groupIds.includes(gid));
     const qMax = qs.reduce((a, q) => a + (+q.max || R.maxQ), 0);
-    return { qs: qs.length, qMax, attMax: R.attMax, sum: qMax + R.attMax, target: R.total || 100 };
+    return { qs: qs.length, qMax, sum: qMax, target: R.total || 100 };
   }
 
   /* ---------- شهور المجموعة (كل ٤ حصص محسوبة = شهر) ----------

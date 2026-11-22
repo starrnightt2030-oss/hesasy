@@ -54,6 +54,7 @@ Views.students = () => {
   <a class="fab tap" href="#/student-new">${ic('plus', 20, 2.4)} طالب جديد</a>`;
 };
 ACT.stuSearch = el => { App.ui.q = el.value; $('#stu-list').innerHTML = studentsListHTML(); };
+ACT.stuTab = el => { App.ui.stuTab = el.dataset.t; render(); };
 ACT.stuFilter = el => { App.ui.stuFilter = el.dataset.f; render(); };
 
 /* ---------- ملف الطالب ---------- */
@@ -70,6 +71,9 @@ Views.student = id => {
   let pres = 0, abs = 0, total = 0;
   s.enrollments.forEach(e => E.enrollmentSessions(st, e, t).forEach(o => { total++; const v = (st.attendance[o.key] || {})[s.id]; if (v === 'p') pres++; else if (v === 'a') abs++; }));
   const ens = s.enrollments.slice().sort((a, b) => (a.endDate ? 1 : 0) - (b.endDate ? 1 : 0));
+  const tabs = [['money', 'الحساب'], ['subjects', 'المواد'], ['att', 'الحضور'], ...(s.grade === 3 ? [['grades', 'الدرجات']] : [])];
+  if (App.ui.stuTabFor !== id) { App.ui.stuTabFor = id; App.ui.stuTab = null; }
+  const tab = tabs.some(x => x[0] === App.ui.stuTab) ? App.ui.stuTab : 'money';
   return `
   <header class="hero-head">
     <div class="topbar">
@@ -101,7 +105,18 @@ Views.student = id => {
         <button class="btn soft sm" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button>
       </div>
     </section>
-
+    <div class="seg tabs-seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="stuTab" data-t="${k}">${l}</button>`).join('')}</div>
+    ${tab === 'money' ? `
+    <section style="display:flex;flex-direction:column;gap:10px">
+      <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button></div>
+      <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.bills.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
+        <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة · ' + E.payLabel(x.p)}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
+          <span class="num b" style="color:var(--green)">+${money(x.p.amount)}</span><button class="icon-btn light" style="width:36px;height:36px" data-act="delPay" data-p="${x.p.id}" aria-label="حذف الدفعة">${ic('x', 16)}</button></div>` : `
+        <div class="list-row"><span class="avatar ${x.c.due > 0 ? (x.c.latest ? 'amber' : 'red') : ''}" style="width:34px;height:34px">${ic('cal', 16)}</span><span class="grow stack"><span class="sm b">${esc(E.billShort(x.c))} · ${x.c.partial ? 'شهر ناقص (' + x.c.held + ' حصص)' : 'الشهر ' + x.c.cycle}${x.c.kind !== 'bundle' && x.c.parts[0].bundle ? ' · عرض' : ''}</span><span class="small muted">${E.fmtDate(x.c.date)}${x.c.due > 0 ? (x.c.paid > 0 ? ' · دفع ' + money(x.c.paid) + ' · باقي ' + money(x.c.due) : ' · باقي ' + money(x.c.due)) : ' · مدفوعة'}</span></span>
+          <span class="num b">${money(x.c.amount)}</span></div>`).join('') || '<div class="sm muted" style="padding:14px 0">لسه مفيش حاجة</div>'}</div>
+    </section>
+    ` : ''}
+    ${tab === 'subjects' ? `
     <section style="display:flex;flex-direction:column;gap:10px">
       <div class="sec-title"><h2>المواد والدورات</h2>${act.length ? `<button class="link" data-act="withdraw" data-s="${s.id}">سحب من مادة</button>` : ''}</div>
       <div class="card tight">${ens.length ? ens.map(e => {
@@ -125,32 +140,24 @@ Views.student = id => {
         </div>`;
       }).join('') : '<div class="sm muted" style="padding:14px 0">مفيش مواد</div>'}</div>
     </section>
-
-    ${studentAttHTML(s)}
-
-    ${s.grade === 3 ? projectStudentSections(s) : ''}
-    <section class="grid2">
-      <div class="card stack" style="gap:4px"><span class="small muted">الحضور (من ${total} حصة)</span><span class="num b" style="font-size:22px">${pres + abs ? Math.round(pres / (pres + abs) * 100) + '٪' : '—'}</span><span class="small" style="color:${abs ? 'var(--red)' : 'var(--green)'};font-weight:600">${pres + abs ? 'حضر ' + pres + ' · غاب ' + abs : total ? 'لسه مفيش غياب متسجل' : 'لسه مفيش حصص'}</span></div>
-      <div class="card stack" style="gap:4px"><span class="small muted">دفع ${term ? esc(term.name) : 'الكل'}</span><span class="num b" style="font-size:22px">${money(termPaid)}</span><span class="small muted">${L.payments.length ? 'آخر دفعة ' + E.fmtShort(L.payments[L.payments.length - 1].date) : 'مفيش دفعات'}</span></div>
-    </section>
-
-    <section style="display:flex;flex-direction:column;gap:10px">
-      <div class="sec-title"><h2>سجل الدفع والدورات</h2><button class="link" data-act="printStudent" data-s="${s.id}">${ic('print', 16)} تقرير الطالب</button></div>
-      <div class="card tight">${[...L.payments.map(p => ({ k: 'p', d: p.date, p })), ...L.bills.map(c => ({ k: 'c', d: c.date, c }))].sort((a, b) => b.d.localeCompare(a.d) || (a.k === 'p' ? -1 : 1)).map(x => x.k === 'p' ? `
-        <div class="list-row"><span class="avatar green" style="width:34px;height:34px">${ic('check', 16, 2.6)}</span><span class="grow stack"><span class="sm b">${x.p.kind === 'discount' ? 'خصم / إعفاء' : 'دفعة · ' + E.payLabel(x.p)}${x.p.note ? ' · ' + esc(x.p.note) : ''}</span><span class="small muted">${E.fmtDate(x.p.date)}</span></span>
-          <span class="num b" style="color:var(--green)">+${money(x.p.amount)}</span><button class="icon-btn light" style="width:36px;height:36px" data-act="delPay" data-p="${x.p.id}" aria-label="حذف الدفعة">${ic('x', 16)}</button></div>` : `
-        <div class="list-row"><span class="avatar ${x.c.due > 0 ? (x.c.latest ? 'amber' : 'red') : ''}" style="width:34px;height:34px">${ic('cal', 16)}</span><span class="grow stack"><span class="sm b">${esc(E.billShort(x.c))} · ${x.c.partial ? 'شهر ناقص (' + x.c.held + ' حصص)' : 'الشهر ' + x.c.cycle}${x.c.kind !== 'bundle' && x.c.parts[0].bundle ? ' · عرض' : ''}</span><span class="small muted">${E.fmtDate(x.c.date)}${x.c.due > 0 ? (x.c.paid > 0 ? ' · دفع ' + money(x.c.paid) + ' · باقي ' + money(x.c.due) : ' · باقي ' + money(x.c.due)) : ' · مدفوعة'}</span></span>
-          <span class="num b">${money(x.c.amount)}</span></div>`).join('') || '<div class="sm muted" style="padding:14px 0">لسه مفيش حاجة</div>'}</div>
-    </section>
-
     ${s.phone || s.notes ? `<section class="card stack" style="gap:6px">${s.phone ? `<div class="row between"><span class="sm muted">موبايل ولي الأمر</span><a class="b num" href="tel:${esc(s.phone)}" style="text-decoration:none">${esc(s.phone)}</a></div>` : ''}${s.notes ? `<div class="sm"><span class="muted">ملاحظات: </span>${esc(s.notes)}</div>` : ''}</section>` : ''}
-
     <section class="card" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px">
       <div class="sm muted" style="line-height:1.7">السحب من مادة بيلغي العرض للمواد الباقية من دورتها الجاية (كل مادة ترجع ${money(st.settings.prices.single)}). المادة المسحوبة بتتحسب بعدد الحصص اللي اتعملت بس.</div>
       <div class="grid2">
         ${act.length ? `<button class="btn ghost" data-act="withdraw" data-s="${s.id}">سحب من مادة</button><button class="btn danger-ghost" data-act="withdraw" data-s="${s.id}" data-all="1">إلغاء الاشتراك</button>` : `<a class="btn ghost" href="#/student-edit/${s.id}">إعادة اشتراك</a><button class="btn danger-ghost" data-act="delStudent" data-s="${s.id}">${ic('trash', 18)} حذف نهائي</button>`}
       </div>
     </section>
+    ` : ''}
+    ${tab === 'att' ? `
+    <section class="grid2">
+      <div class="card stack" style="gap:4px"><span class="small muted">الحضور (من ${total} حصة)</span><span class="num b" style="font-size:22px">${pres + abs ? Math.round(pres / (pres + abs) * 100) + '٪' : '—'}</span><span class="small" style="color:${abs ? 'var(--red)' : 'var(--green)'};font-weight:600">${pres + abs ? 'حضر ' + pres + ' · غاب ' + abs : total ? 'لسه مفيش غياب متسجل' : 'لسه مفيش حصص'}</span></div>
+      <div class="card stack" style="gap:4px"><span class="small muted">دفع ${term ? esc(term.name) : 'الكل'}</span><span class="num b" style="font-size:22px">${money(termPaid)}</span><span class="small muted">${L.payments.length ? 'آخر دفعة ' + E.fmtShort(L.payments[L.payments.length - 1].date) : 'مفيش دفعات'}</span></div>
+    </section>
+    ${studentAttHTML(s)}
+    ` : ''}
+    ${tab === 'grades' ? `
+    ${s.grade === 3 ? projectStudentSections(s) : ''}
+    ` : ''}
   </main>`;
 };
 

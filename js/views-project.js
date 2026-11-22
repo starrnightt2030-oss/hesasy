@@ -58,9 +58,9 @@ function planBanner(P) {
   if (!P) return '';
   const ok = Math.abs(P.sum - P.target) < 0.01;
   return `<div class="plan ${ok ? 'ok' : P.sum > P.target ? 'over' : ''}">
-    <div class="plan-bar"><span class="att" style="flex:${P.attMax}"></span><span class="q" style="flex:${P.qMax || 0.0001}"></span>${P.sum < P.target ? `<span class="rest" style="flex:${P.target - P.sum}"></span>` : ''}</div>
-    <div class="row between small"><span><i class="lg att"></i> الحضور ${num(P.attMax)}</span><span><i class="lg q"></i> الأسئلة (${P.qs}) ${num(P.qMax)}</span><b>${num(P.sum)} / ${P.target}</b></div>
-    ${ok ? '' : `<div class="small" style="color:${P.sum > P.target ? 'var(--red)' : 'var(--accent-text)'};font-weight:600">${P.sum > P.target ? 'المجموع أكتر من ' + P.target + ' — قلل درجات الأسئلة أو درجة الحضور' : 'لسه فاضل ' + num(P.target - P.sum) + ' درجة تتوزع على أسئلة جاية'}</div>`}
+    <div class="plan-bar"><span class="q" style="flex:${P.qMax || 0.0001}"></span>${P.sum < P.target ? `<span class="rest" style="flex:${P.target - P.sum}"></span>` : ''}</div>
+    <div class="row between small"><span><i class="lg q"></i> درجات الأسئلة (${P.qs} ${P.qs === 1 ? 'سؤال' : 'أسئلة'})</span><b>${num(P.sum)} / ${P.target}</b></div>
+    ${ok ? '' : `<div class="small" style="color:${P.sum > P.target ? 'var(--red)' : 'var(--accent-text)'};font-weight:600">${P.sum > P.target ? 'المجموع أكتر من ' + P.target + ' — قلل درجات بعض الأسئلة' : 'لسه فاضل ' + num(P.target - P.sum) + ' درجة تتوزع على أسئلة جاية'}</div>`}
   </div>`;
 }
 function questionStats(q) {
@@ -279,7 +279,7 @@ function gradesView() {
       return `<a class="list-row tap" href="#/student/${r.student.id}" style="align-items:flex-start">
         <span class="score-ring" style="--p:${R.outOf ? Math.round(R.total / R.outOf * 100) : 0};--c:${scoreColor(R.total, R.outOf)}"><b>${num(R.total)}</b></span>
         <span class="grow stack" style="gap:4px;min-width:0"><span class="b ellipsis">${esc(r.student.name)}</span>
-          <span class="small muted">الحضور ${num(R.attScore)}/${num(R.attMax)} · الأسئلة ${num(R.qGot)}/${num(R.qMax)}</span>
+          <span class="small muted">الأسئلة ${num(R.qGot)}/${num(R.qMax)}${R.attLost ? ` · <b style="color:var(--red)">خصم غياب ${neg(num(R.attLost))}</b>` : ''}</span>
           ${cur ? `<span class="small" style="font-weight:600;color:${cur.lostAll ? 'var(--red)' : 'var(--green)'}">الشهر ${cur.n}: ${cur.lostAll ? 'خسر ' + num(cur.lostAll) + ' درجة' + (cur.attLost ? ' (غياب ' + num(cur.attLost) + ')' : '') : 'مخسرش درجات'}${cur.qMissing ? ' · ' + cur.qMissing + ' سؤال لسه' : ''}</span>` : ''}</span>
         <span class="small muted" style="white-space:nowrap">من ${num(R.outOf)}</span></a>`;
     }).join('')}</div>` : '<div class="card sm muted">مفيش طلاب في المجموعة دي</div>'}
@@ -299,9 +299,8 @@ function studentScoreHTML(s) {
       <div class="row" style="gap:16px">
         <span class="score-ring lg" style="--p:${pc};--c:${scoreColor(R.total, R.outOf)}"><b>${num(R.total)}</b><i>من ${num(R.outOf)}</i></span>
         <div class="grow stack" style="gap:8px">
-          <div class="srow"><span>الحضور</span><span class="bar thin green"><span style="width:${R.attMax ? R.attScore / R.attMax * 100 : 0}%"></span></span><b>${num(R.attScore)}/${num(R.attMax)}</b></div>
           <div class="srow"><span>الأسئلة</span><span class="bar thin"><span style="width:${R.qMax ? R.qGot / R.qMax * 100 : 0}%"></span></span><b>${num(R.qGot)}/${num(R.qMax)}</b></div>
-          ${R.attLost ? `<span class="small" style="color:var(--red);font-weight:600">خسر ${num(R.attLost)} درجة بسبب الغياب</span>` : '<span class="small" style="color:var(--green);font-weight:600">مخسرش درجات حضور</span>'}
+          <div class="srow"><span>الغياب</span><span class="small" style="color:${R.attLost ? 'var(--red)' : 'var(--green)'};font-weight:600">${R.attLost ? 'اتخصم بسبب الغياب' : 'مفيش خصم غياب'}</span><b style="color:${R.attLost ? 'var(--red)' : 'var(--green)'}">${R.attLost ? neg(num(R.attLost)) : '0'}</b></div>
         </div>
       </div>
       ${R.outOf < R.target ? `<div class="small muted">الدرجة من ${num(R.outOf)} لحد دلوقتي — باقي ${num(R.target - R.outOf)} درجة على أسئلة جاية</div>` : ''}
@@ -359,6 +358,7 @@ window.dueAlertsHTML = () => {
         <a class="avatar ${ended ? 'red' : 'amber'}" href="#/student/${s.id}" style="text-decoration:none;width:38px;height:38px">${esc(initial(s.name))}</a>
         <a class="grow stack" href="#/student/${s.id}" style="text-decoration:none;color:inherit;min-width:0"><span class="b ellipsis">${esc(s.name)}</span><span class="small muted ellipsis">${E.GRADES[s.grade]} · ${r.subjects.map(id => E.SUBJ[id].short).join('، ')} · ${ended ? 'خلص ٤ حصص' : 'حصة ٣ من ٤'}</span></a>
         <span class="num b" style="color:${ended ? 'var(--red)' : 'var(--accent-text)'}">${money(r.amount)}</span>
+        <button class="icon-btn light" style="width:38px;height:38px;background:var(--ink);color:#fff" data-act="pay" data-s="${s.id}" aria-label="تسجيل دفعة">${ic('plus', 18, 2.6)}</button>
         ${s.phone ? `<button class="icon-btn light" style="width:38px;height:38px;background:var(--green-soft);color:var(--green-text)" data-act="waStudent" data-s="${s.id}" aria-label="تذكير ولي الأمر">${ic('chat', 18)}</button>` : ''}</div>`; }).join('') : ''}
     </section>`;
   };
@@ -412,20 +412,20 @@ function projGradesTable(st, s) {
   const R = E.projectReport(st, s);
   if (!R.months.length && !R.qs.length) return '';
   return `<h2>مشروع التخرج — الدرجات الشهرية</h2>
-    <div class="boxes"><div class="g">الدرجة النهائية<b class="green">${num(R.total)} / ${num(R.outOf)}</b></div><div>الحضور<b>${num(R.attScore)} / ${num(R.attMax)}</b></div><div>الأسئلة<b>${num(R.qGot)} / ${num(R.qMax)}</b></div><div class="${R.attLost ? 'r' : 'g'}">خسر بسبب الغياب<b class="${R.attLost ? 'red' : 'green'}">${R.attLost ? neg(num(R.attLost)) : '0'}</b></div></div>
-    <table><thead><tr><th>الشهر</th><th class="c">غياب</th><th class="c">خصم الحضور</th><th>الأسئلة</th><th class="c">حصّل</th><th>الحالة</th></tr></thead><tbody>
+    <div class="boxes"><div class="g">الدرجة النهائية<b class="green">${num(R.total)} / ${num(R.outOf)}</b></div><div>الأسئلة<b>${num(R.qGot)} / ${num(R.qMax)}</b></div><div class="${R.attLost ? 'r' : 'g'}">خسر بسبب الغياب<b class="${R.attLost ? 'red' : 'green'}">${R.attLost ? neg(num(R.attLost)) : '0'}</b></div></div>
+    <table><thead><tr><th>الشهر</th><th class="c">غياب</th><th class="c">خصم الغياب</th><th>الأسئلة</th><th class="c">حصّل</th><th>الحالة</th></tr></thead><tbody>
     ${R.months.map(m => `<tr>${td('الشهر ' + m.n + (m.complete ? '' : ' (جاري)') + (m.from ? '<br><span class="muted n" style="font-size:7.5pt">' + E.fmtShort(m.from) + '</span>' : ''))}${td(m.abs, 'c')}${td(m.attLost ? '<span class="red">' + neg(num(m.attLost)) + '</span>' : m.forgiven ? '<span class="tag b">سماح</span>' : '0', 'c n')}${td(m.qs.map(({ q, res: x }) => esc(q.name) + ': ' + (x ? '<b>' + num(x.final) + '</b>/' + num(x.max) + (x.late ? ' <span class="amber">(' + neg(x.pct + '٪') + ')</span>' : '') : '<span class="red">لسه</span>')).join('<br>') || '—')}${td(m.qMax ? num(m.qGot) + ' / ' + num(m.qMax) : '—', 'c n')}${td(m.lostAll ? '<span class="tag r">خسر ' + num(m.lostAll) + '</span>' : '<span class="tag g">مخسرش</span>')}</tr>`).join('')}</tbody></table>`;
 }
 Print.projGrades = o => {
   const st = App.st, gs = o.g ? [E.groupById(st, o.g)] : (App.ui.projGroup ? [E.groupById(st, App.ui.projGroup)] : g3Groups());
   const P = E.projectPlan(st);
   doPrint('مشروع التخرج — كشف الدرجات', (gs.length === 1 ? E.groupLabel(st, gs[0]) : 'كل المجموعات') + ' · ' + E.fmtDate(E.today()),
-    `<div class="note">الدرجة = الحضور (${num(P.attMax)} ناقص خصم الغياب) + الأسئلة بعد خصم التأخير · المقرر لحد دلوقتي ${num(P.sum)} من ${P.target}</div>` +
+    `<div class="note">الدرجة = درجات الأسئلة بعد خصم التأخير − خصم الغياب · درجات الأسئلة المقررة لحد دلوقتي ${num(P.sum)} من ${P.target}</div>` +
     gs.map(g => {
       const rows = E.projectRoster(st, [g.id], '0000').map(r => ({ s: r.student, R: E.projectReport(st, r.student) }));
       const M = Math.max(1, ...rows.map(r => r.R.months.length));
-      return `<h2>${esc(E.groupLabel(st, g))} — ${rows.length} طالب</h2><table><thead><tr><th>#</th><th>الطالب</th>${Array.from({ length: M }, (_, i) => `<th class="c">الشهر ${i + 1}<br><span style="font-weight:400;font-size:7pt">غياب · أسئلة</span></th>`).join('')}<th class="c">الحضور</th><th class="c">الأسئلة</th><th class="c">الإجمالي</th></tr></thead><tbody>
-        ${rows.map((r, i) => `<tr>${td(i + 1, 'c')}${td('<b>' + esc(r.s.name) + '</b>')}${Array.from({ length: M }, (_, k) => { const m = r.R.months[k]; return td(!m ? '' : `${m.attLost ? '<span class="red">' + neg(num(m.attLost)) + '</span>' : '0'} · ${m.qMax ? num(m.qGot) + '/' + num(m.qMax) : '—'}`, 'c n'); }).join('')}${td(num(r.R.attScore) + '/' + num(r.R.attMax), 'c n')}${td(num(r.R.qGot) + '/' + num(r.R.qMax), 'c n')}${td('<b>' + num(r.R.total) + '</b> / ' + num(r.R.outOf), 'c n')}</tr>`).join('') || '<tr><td colspan="9">مفيش طلاب</td></tr>'}</tbody></table>`;
+      return `<h2>${esc(E.groupLabel(st, g))} — ${rows.length} طالب</h2><table><thead><tr><th>#</th><th>الطالب</th>${Array.from({ length: M }, (_, i) => `<th class="c">الشهر ${i + 1}<br><span style="font-weight:400;font-size:7pt">غياب · أسئلة</span></th>`).join('')}<th class="c">الأسئلة</th><th class="c">خصم الغياب</th><th class="c">الإجمالي</th></tr></thead><tbody>
+        ${rows.map((r, i) => `<tr>${td(i + 1, 'c')}${td('<b>' + esc(r.s.name) + '</b>')}${Array.from({ length: M }, (_, k) => { const m = r.R.months[k]; return td(!m ? '' : `${m.attLost ? '<span class="red">' + neg(num(m.attLost)) + '</span>' : '0'} · ${m.qMax ? num(m.qGot) + '/' + num(m.qMax) : '—'}`, 'c n'); }).join('')}${td(num(r.R.qGot) + '/' + num(r.R.qMax), 'c n')}${td(r.R.attLost ? '<span class="red">' + neg(num(r.R.attLost)) + '</span>' : '0', 'c n')}${td('<b>' + num(r.R.total) + '</b> / ' + num(r.R.outOf), 'c n')}</tr>`).join('') || '<tr><td colspan="9">مفيش طلاب</td></tr>'}</tbody></table>`;
     }).join(''));
 };
 Print.late = () => {

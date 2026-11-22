@@ -41,75 +41,140 @@ function sessionCard(o, opt = {}) {
     </div></a>`;
 }
 
-/* ---------- الرئيسية ---------- */
+/* ---------- الرئيسية: لوحة "اعمل إيه النهارده" ---------- */
+const plural = (n, one, two, many) => n === 1 ? one : n === 2 ? two : n + ' ' + (n > 10 ? one : many);
+function ringSVG(p, size, stroke, color, track) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, p)) / 100);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="ring-svg" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>`;
+}
+function todayTasks() {
+  const st = App.st, C = App.C, t = E.today();
+  const M = App.miss || { sessions: [], count: 0 }, EV = App.ev || { finished: [], started: [] };
+  const al = E.dueAlerts(st, C);
+  const ledgers = [...C.ledgers.values()];
+  const late = ledgers.filter(L => L.late > 0);
+  const part = ledgers.filter(L => L.partPaid && L.due > 0);
+  const next = E.sessionsOnDay(st, t).filter(o => o.status === 'normal' && E.studentsInSession(st, o).length && minutesUntil(o.date, o.time) > -45)[0];
+  const T = [];
+  if (next) {
+    const g = E.groupById(st, next.groupId), sub = E.SUBJ[g.subjectId], m = minutesUntil(next.date, next.time);
+    T.push({ tone: m <= 60 ? 'amber' : 'blue', icon: 'clock', href: '#/session/' + encodeURIComponent(next.key), title: (m > 0 ? 'الحصة الجاية: ' : 'شغالة دلوقتي: ') + sub.name,
+      sub: E.fmtTime(next.time) + ' · ' + E.GRADES[sub.grade] + ' · ' + E.studentsInSession(st, next).length + ' طالب', cta: m > 0 ? (m < 60 ? 'بعد ' + m + ' د' : 'افتح') : 'الغياب' });
+  }
+  if (M.count) T.push({ tone: 'red', icon: 'check', href: '#/missing', title: M.count + ' غياب متسجلش', sub: 'في ' + plural(M.sessions.length, 'حصة', 'حصتين', 'حصص') + ' فاتت — سجّلهم قبل ما تنسى', cta: 'سجّل' });
+  if (late.length) T.push({ tone: 'red', icon: 'wallet', href: '#/students', act: 'stuLate', title: plural(late.length, 'طالب', 'طالبين', 'طلاب') + ' عليهم شهر وبدأوا التاني', sub: 'متأخر ' + money(late.reduce((a, L) => a + L.late, 0)), cta: 'تابع' });
+  if (al.ended.length) T.push({ tone: 'amber', icon: 'alert', href: '#/dues', title: plural(al.ended.length, 'طالب', 'طالبين', 'طلاب') + ' خلصوا الشهر ومدفعوش', sub: money(al.ended.reduce((a, r) => a + r.amount, 0)) + ' مستني التحصيل', cta: 'التحصيل' });
+  if (part.length) T.push({ tone: 'amber', icon: 'layers', href: '#/students', act: 'stuPart', title: plural(part.length, 'طالب', 'طالبين', 'طلاب') + ' دفعوا جزء', sub: 'باقي عليهم ' + money(part.reduce((a, L) => a + L.due, 0)), cta: 'عرض' });
+  const fin = new Set(EV.finished.map(x => x.student.id)).size, stt = new Set(EV.started.map(x => x.student.id)).size;
+  if (fin || stt) T.push({ tone: 'violet', icon: 'refresh', href: '#/months', title: stt ? plural(stt, 'طالب', 'طالبين', 'طلاب') + ' بدأوا شهر جديد النهارده' : plural(fin, 'طالب', 'طالبين', 'طلاب') + ' خلصوا شهرهم', sub: stt && fin ? 'و' + fin + ' خلصوا شهرهم والحصة الجاية شهر جديد' : 'الحصة الجاية بيبدأ حساب شهر جديد', cta: 'عرض' });
+  return T;
+}
+ACT.stuLate = () => { App.ui.stuFilter = 'late'; go('students'); };
+ACT.stuPart = () => { App.ui.stuFilter = 'part'; go('students'); };
 Views.home = () => {
   const st = App.st, C = App.C, t = E.today();
   const sum = E.periodSummary(st, C, E.monthStart(t), E.monthEnd(t));
   const today = E.sessionsOnDay(st, t);
   const active = today.filter(o => o.status === 'normal' && E.studentsInSession(st, o).length);
   const ledgers = [...C.ledgers.values()];
-  const late = ledgers.filter(L => L.late > 0);
   const owing = ledgers.filter(L => L.due > 0);
   const h = new Date().getHours();
   const tomorrow = E.sessionsOnDay(st, E.addDays(t, 1)).filter(o => o.status === 'normal');
-  const groups = st.groups.map(g => ({ g, d: E.groupDues(st, C, g.id) })).filter(x => x.d.owed > 0).sort((a, b) => b.d.owed - a.d.owed).slice(0, 6);
+  const groups = st.groups.map(g => ({ g, d: E.groupDues(st, C, g.id) })).filter(x => x.d.owed > 0).sort((a, b) => b.d.owed - a.d.owed).slice(0, 5);
   const nothing = !st.groups.length;
-  const lateMsg = late.length ? `${late.length} ${late.length > 10 || late.length < 3 ? 'طالب' : 'طلاب'} عليهم شهر وبدأوا التاني` : `${owing.length} ${owing.length > 10 || owing.length < 3 ? 'طالب' : 'طلاب'} عليهم فلوس الشهر الحالي`;
+  const M = App.miss || { count: 0 };
+  const tasks = nothing ? [] : todayTasks();
+  const doneToday = active.filter(o => minutesUntil(o.date, o.time) <= 0).length;
+  const al = E.dueAlerts(st, C);
+  const nBell = ledgers.filter(L => L.late > 0).length + al.ended.length + al.third.length + (App.miss ? App.miss.sessions.length : 0) + (App.ev ? App.ev.started.length : 0);
+  const term = E.termOf(st, t);
 
   return `
-  <header class="hero-head">
+  <header class="hero-head home">
     <div class="topbar">
-      <div class="brand">${brandIcon()}<div class="stack"><div class="brand-name">${esc(st.settings.appName)}</div><div class="sub">${E.fmtDate(t)}${E.termOf(st, t) ? ' · ' + esc(E.termOf(st, t).name) : ''}</div></div></div>
+      <div class="brand">${brandIcon()}<div class="stack"><div class="brand-name">${esc(st.settings.appName)}</div><div class="sub">${E.fmtDate(t)}${term ? ' · ' + esc(term.name) : ''}</div></div></div>
       <div class="head-actions">
         ${eyeBtn()}
-        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${(() => { const al = E.dueAlerts(st, C); const n = late.length + al.ended.length + al.third.length + (App.miss ? App.miss.sessions.length : 0) + (App.ev ? App.ev.started.length : 0); return ic('bell', 22, 2, n ? 'ring' : '') + (n ? `<span class="badge">${n}</span>` : ''); })()}</button>
+        <button class="icon-btn" data-act="notifs" aria-label="التنبيهات">${ic('bell', 22, 2, nBell ? 'ring' : '')}${nBell ? `<span class="badge">${nBell}</span>` : ''}</button>
         <a class="icon-btn" href="#/settings" aria-label="الإعدادات">${ic('gear', 22)}</a>
       </div>
     </div>
-    <div class="greet"><div class="sub" style="font-size:15px">${h < 12 ? 'صباح الخير' : 'مساء الخير'} يا أستاذ</div>
-      <div class="big">${active.length ? 'عندك ' + active.length + (active.length === 1 ? ' حصة' : active.length === 2 ? ' حصتين' : ' حصص') + ' النهارده' : 'مفيش حصص النهارده'}</div></div>
+    <div class="greet"><div class="hello">${h < 12 ? 'صباح الخير' : 'مساء الخير'} يا أستاذ</div>
+      <div class="big">${active.length ? 'عندك ' + plural(active.length, 'حصة', 'حصتين', 'حصص') + ' النهارده' : 'مفيش حصص النهارده'}</div></div>
+    ${nothing ? '' : `<div class="today-strip">
+      <a class="ts" href="#/schedule"><span class="ts-ic">${ic('cal', 18)}</span><span class="stack"><b class="num">${doneToday}/${active.length}</b><span>حصص النهارده</span></span></a>
+      <a class="ts ${M.count ? 'hot' : ''}" href="#/missing"><span class="ts-ic">${ic('check', 18, 2.4)}</span><span class="stack"><b class="num">${M.count}</b><span>غياب ناقص</span></span></a>
+      <a class="ts" href="#/dues"><span class="ts-ic">${ic('users', 18)}</span><span class="stack"><b class="num">${owing.length}</b><span>عليهم فلوس</span></span></a>
+    </div>`}
   </header>
   <main class="wrap lift">
-    <section class="card big" style="display:flex;flex-direction:column;gap:14px">
-      <div class="row between"><span class="sm b muted">تحصيل شهر ${E.monthName(t)}</span><span class="chip green">${sum.pct}٪</span></div>
-      <div class="row" style="align-items:baseline;gap:8px"><span class="money-big">${moneyN(sum.paid)}</span><span class="muted">من ${money(sum.due)}</span></div>
-      <div class="bar"><span style="width:${sum.pct}%"></span></div>
-      <div class="grid2">
-        <div class="stat amber"><span class="k">متبقي الشهر ده</span><span class="v">${money(sum.remaining)}</span></div>
-        <div class="stat red"><span class="k">متأخرات شهور سابقة</span><span class="v">${money(sum.prior)}</span></div>
+    <section class="money-card">
+      <div class="mc-ring">${ringSVG(sum.pct, 92, 10, 'var(--green)', 'var(--line-2)')}<span class="mc-pct num">${sum.pct}<small>٪</small></span></div>
+      <div class="grow stack" style="gap:4px;min-width:0">
+        <span class="mc-k">تحصيل شهر ${E.monthName(t)}</span>
+        <span class="money-big">${moneyN(sum.paid)}<small> ج</small></span>
+        <span class="small muted">من ${money(sum.due)} مستحق الشهر ده</span>
       </div>
-      ${App.st.settings.privacy.hide && !shown() ? `<button class="btn soft sm" data-act="reveal">${ic('eye', 18)} اضغط لعرض الأرصدة</button>` : ''}
+      <div class="mc-stats">
+        <div><span class="dotx amber"></span><span class="k">متبقي الشهر</span><b class="num">${money(sum.remaining)}</b></div>
+        <div><span class="dotx red"></span><span class="k">متأخرات قديمة</span><b class="num">${money(sum.prior)}</b></div>
+        <div><span class="dotx green"></span><span class="k">اتقبض الشهر</span><b class="num">${money(sum.cash)}</b></div>
+      </div>
+      ${App.st.settings.privacy.hide && !shown() ? `<button class="btn soft sm block" data-act="reveal">${ic('eye', 18)} اضغط لعرض الأرصدة</button>` : ''}
     </section>
 
-    ${owing.length ? `<a class="alert-strip tap" href="#/dues">
-      <span class="ic ${late.length ? 'pulse' : ''}">${ic('alert', 20, 2.4, late.length ? 'ring' : '')}</span>
-      <span class="grow stack"><span class="b">${lateMsg}</span><span class="sm" style="color:var(--on-ink-muted)">${late.length ? 'إجمالي المتأخر ' + money(late.reduce((a, L) => a + L.late, 0)) : 'اضغط لعرض التفاصيل حسب المجموعة'}</span></span>
-      ${ic('chev', 20)}</a>` : ''}
-
-    ${nothing ? '' : followupHTML()}
-
-    ${nothing ? '' : homeGroupsHTML()}
+    ${nothing ? '' : `<nav class="quick" aria-label="اختصارات">
+      <a class="qa tap" href="#/student-new"><span class="qa-ic blue">${ic('user', 22)}</span><span>طالب جديد</span></a>
+      <button class="qa tap" data-act="quickPay"><span class="qa-ic green">${ic('wallet', 22)}</span><span>تسجيل دفعة</span></button>
+      <a class="qa tap" href="#/groups"><span class="qa-ic violet">${ic('layers', 22)}</span><span>المجموعات</span></a>
+      <button class="qa tap" data-act="report" data-r="late"><span class="qa-ic amber">${ic('print', 22)}</span><span>كشف المستحقات</span></button>
+    </nav>`}
 
     ${nothing ? `<section class="card"><div class="empty"><span class="ic">${ic('layers', 30)}</span><h3>أهلًا بيك! نبدأ منين؟</h3>
       <div class="sm">١. أضف المجموعات (المادة + اليوم + الساعة)<br>٢. أضف الطلاب ومواد كل طالب<br>والتطبيق هيحسب كل حاجة لوحده.</div>
       <a class="btn accent" href="#/groups">${ic('plus', 18)} أضف أول مجموعة</a></div></section>` : `
-    <section style="display:flex;flex-direction:column;gap:10px">
-      <div class="sec-title"><h2>حصص النهارده</h2><a href="#/schedule">الجدول كامل</a></div>
-      ${today.length ? today.map(o => sessionCard(o)).join('') : `<div class="card sm muted" style="text-align:center">مفيش حصص النهارده${tomorrow.length ? ' · بكرة عندك ' + tomorrow.length + (tomorrow.length === 1 ? ' حصة' : ' حصص') : ''}</div>`}
+    <section class="sec">
+      <div class="sec-title"><h2>اعمل إيه النهارده</h2>${tasks.length ? `<span class="count-pill">${tasks.length}</span>` : ''}</div>
+      ${tasks.length ? `<div class="tasks">${tasks.map(x => `<a class="task tap ${x.tone}" href="${x.href}" ${x.act ? `data-act="${x.act}"` : ''}>
+        <span class="task-ic">${ic(x.icon, 20, 2.2)}</span>
+        <span class="grow stack" style="gap:1px;min-width:0"><span class="b ellipsis">${esc(x.title)}</span><span class="small muted ellipsis">${x.sub}</span></span>
+        <span class="task-cta">${esc(x.cta)}</span></a>`).join('')}</div>`
+        : `<div class="card all-good"><span class="task-ic green">${ic('check', 20, 2.6)}</span><span class="grow stack"><span class="b">كله تمام</span><span class="small muted">الغياب متسجل ومفيش متأخرات محتاجة متابعة</span></span></div>`}
     </section>
-    ${today.length && tomorrow.length ? `<div class="card row" style="padding:12px 14px"><span class="chip blue">بكرة</span><span class="sm grow">${tomorrow.map(o => esc(E.SUBJ[E.groupById(st, o.groupId).subjectId].short) + ' ' + E.fmtTime(o.time)).join(' · ')}</span></div>` : ''}
-    <section style="display:flex;flex-direction:column;gap:10px">
-      <div class="sec-title"><h2>مجموعات عليها فلوس</h2><a href="#/dues">الكل</a></div>
+
+    <section class="sec">
+      <div class="sec-title"><h2>حصص النهارده</h2><a href="#/schedule">الجدول ${ic('chev', 14)}</a></div>
+      ${today.length ? today.map(o => sessionCard(o)).join('') : `<div class="card sm muted" style="text-align:center">مفيش حصص النهارده${tomorrow.length ? ' · بكرة عندك ' + plural(tomorrow.length, 'حصة', 'حصتين', 'حصص') : ''}</div>`}
+      ${today.length && tomorrow.length ? `<div class="tomorrow"><span class="chip blue">بكرة</span><span class="sm grow">${tomorrow.map(o => esc(E.SUBJ[E.groupById(st, o.groupId).subjectId].short) + ' ' + E.fmtTime(o.time)).join(' · ')}</span></div>` : ''}
+    </section>
+
+    ${homeGroupsHTML()}
+
+    <section class="sec">
+      <div class="sec-title"><h2>مجموعات عليها فلوس</h2><a href="#/dues">التحصيل ${ic('chev', 14)}</a></div>
       ${groups.length ? `<div class="card tight">${groups.map(({ g, d }) => {
         const sub = E.SUBJ[g.subjectId];
         const all = E.groupDues(st, C, g.id);
         return `<a class="list-row tap" href="#/dues" data-act="openDuesGroup" data-g="${g.id}" style="flex-direction:column;align-items:stretch;gap:8px">
-          <span class="row between"><span class="row" style="gap:8px;min-width:0"><span class="dot g${sub.grade}"></span><span class="b ellipsis">${esc(sub.name)} · ${esc(E.groupLabel(st, g))}</span></span><span class="num b" style="color:var(--red)">${money(d.owed)}</span></span>
-          <span class="row between small muted"><span>${d.late.length + d.current.length} عليهم</span><span>${d.late.length ? d.late.length + ' عليهم شهرين' : 'كله الشهر الحالي'}</span></span>
+          <span class="row between"><span class="row" style="gap:10px;min-width:0"><span class="sub-ic g${sub.grade}">${ic(sub.grade === 3 ? 'box' : sub.grade === 2 ? 'plug' : 'book', 16)}</span><span class="b ellipsis">${esc(sub.name)} · ${esc(E.groupLabel(st, g))}</span></span><span class="num b" style="color:var(--red)">${money(d.owed)}</span></span>
+          <span class="row between small muted"><span>${d.late.length + d.current.length} عليهم</span><span>${d.late.length ? d.late.length + ' متأخرين شهر' : 'كله الشهر الحالي'}</span></span>
           <span class="bar thin green"><span style="width:${pct(all.paid, all.due)}%"></span></span></a>`;
-      }).join('')}</div>` : `<div class="card row" style="gap:10px"><span class="avatar green">${ic('check', 20, 2.6)}</span><span class="sm">كل المجموعات خالصة — مفيش فلوس متأخرة</span></div>`}
+      }).join('')}</div>` : `<div class="card all-good"><span class="task-ic green">${ic('check', 20, 2.6)}</span><span class="sm">كل المجموعات خالصة — مفيش فلوس متأخرة</span></div>`}
     </section>`}
   </main>`;
+};
+/* تسجيل دفعة سريع من الرئيسية: دوّر على الطالب واختاره */
+ACT.quickPay = () => {
+  const st = App.st, C = App.C;
+  const all = st.students.filter(s => s.status !== 'withdrawn' || (C.ledgers.get(s.id) || {}).due > 0)
+    .map(s => C.ledgers.get(s.id)).filter(Boolean).sort((a, b) => b.due - a.due || a.student.name.localeCompare(b.student.name, 'ar'));
+  const row = L => `<button class="list-row tap" data-pick="${L.student.id}"><span class="avatar ${L.late > 0 ? 'red' : L.due > 0 ? 'amber' : 'green'}">${esc(initial(L.student.name))}</span>
+    <span class="grow stack" style="gap:2px;min-width:0"><span class="b ellipsis">${esc(L.student.name)}</span><span class="small muted ellipsis">${E.GRADES[L.student.grade]}</span></span>${statusChip(L)}</button>`;
+  const s = sheet(`<h2>تسجيل دفعة</h2>
+    <label class="search-box">${ic('search', 20)}<input id="qp-q" placeholder="اكتب اسم الطالب" autofocus></label>
+    <div class="card tight" id="qp-list" style="box-shadow:none;border:1px solid var(--line);max-height:55vh;overflow:auto">${all.map(row).join('') || '<div class="sm muted" style="padding:14px 0">مفيش طلاب</div>'}</div>`);
+  $('#qp-q', s.el).oninput = e => { const q = e.target.value.trim(); $('#qp-list', s.el).innerHTML = all.filter(L => !q || L.student.name.includes(q) || (L.student.phone || '').includes(q)).map(row).join('') || '<div class="sm muted" style="padding:14px 0">مفيش نتايج</div>'; };
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-pick]'); if (b) { s.close(); ACT.pay({ dataset: { s: b.dataset.pick } }); } });
 };
 ACT.openDuesGroup = el => { App.ui.openGroup = el.dataset.g; go('dues'); };
 

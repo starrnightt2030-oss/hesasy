@@ -56,6 +56,7 @@ Views.dues = () => {
           <a class="grow stack" href="#/student/${s.id}" style="text-decoration:none;color:inherit"><span class="b ellipsis">${esc(s.name)}</span>
             <span class="small muted">${kind === 'late' ? `متأخر ${money(r.late)}${r.current ? ' + الحالي ' + money(r.current) : ''}` : `دورة ${E.fmtShort(r.items[r.items.length - 1].date)}${r.items.some(c => c.paid > 0) ? ' · دفع جزء' : ''}`}</span></a>
           <span class="num b" style="color:${kind === 'late' ? 'var(--red)' : 'var(--accent-text)'}">${money(r.total)}</span>
+          <button class="icon-btn light" style="width:38px;height:38px;background:var(--ink);color:#fff" data-act="pay" data-s="${s.id}" aria-label="تسجيل دفعة">${ic('plus', 18, 2.6)}</button>
           ${s.phone ? `<button class="icon-btn light" style="width:38px;height:38px;background:var(--green-soft);color:var(--green-text)" data-act="waStudent" data-s="${s.id}" aria-label="تذكير ولي الأمر">${ic('chat', 18)}</button>` : ''}</div>`;
       };
       return `<section class="card flush" style="${isOpen ? 'box-shadow:var(--shadow)' : ''}">

@@ -114,7 +114,7 @@ const Report = window.Report = {
         x.drawImage(full, 0, a * PR, W, (b - a) * PR, 0, Report.TOP * PR, W, (b - a) * PR);
         if (cuts.length > 1) {
           x.fillStyle = '#6B7385';
-          x.font = `${11 * PR}px "IBM Plex Sans Arabic", sans-serif`;
+          x.font = `${11 * PR}px "Cairo", sans-serif`;
           x.textAlign = 'center'; x.direction = 'rtl';
           x.fillText(`صفحة ${i + 1} من ${cuts.length}`, W / 2, H - 22 * PR);
         }
