@@ -154,7 +154,7 @@ function unlock(silent) {
   App.unlocked = true;
   if (!silent) Sound.play('ok');
   render();
-  setTimeout(dailyChecks, 500);
+  if (App.recovery) setTimeout(offerRecovery, 400); else setTimeout(dailyChecks, 500);
   if (!started) { started = true; setTimeout(dailyBackup, 1500); setInterval(checkReminders, 20000); setInterval(checkCloudBackup, 20000); setTimeout(checkCloudBackup, 4000); Drive.warm(); }
   checkReminders();
 }
@@ -208,6 +208,22 @@ function checkReminders() {
       Sound.play('chime');
       toast(`<b>${esc(sub.name)}</b> ${when} · ${E.GRADES[sub.grade]} · ${n} طالب`, { type: 'warn', icon: 'bell', action: 'الغياب', ms: 10000, onAction: () => go('session', o.key) });
       sysNotify('حصة ' + sub.name + ' ' + when, E.GRADES[sub.grade] + (g.name ? ' · ' + g.name : '') + ' · الساعة ' + E.fmtTime(o.time) + ' · ' + n + ' طالب', location.pathname + '#/session/' + encodeURIComponent(o.key), o.key);
+    }
+  }
+  // الغياب اللي متسجلش: بعد الحصة بساعة، تنبيه مرة واحدة لكل حصة
+  if (App.st.settings.reminders.missing !== false && App.miss) {
+    const t = E.today();
+    for (const { o, students } of App.miss.sessions) {
+      const k = 'miss:' + o.key;
+      if (r.k.includes(k)) continue;
+      if (o.date === t && minutesUntil(o.date, o.time) > -60) continue;
+      if (o.date < E.addDays(t, -1)) continue;            // القديم بيظهر في ملخص اليوم وصفحة "الغياب اللي متسجلش"
+      r.k.push(k);
+      const sub = E.SUBJ[E.groupById(App.st, o.groupId).subjectId];
+      Sound.play('alert');
+      toast(`<b>نسيت تسجل غياب ${esc(sub.name)}؟</b> ${students.length} طالب متسجلوش · ${E.fmtShort(o.date)} ${E.fmtTime(o.time)}`, { type: 'err', icon: 'alert', action: 'سجّل', ms: 12000, onAction: () => go('session', o.key) });
+      sysNotify('متسجلش غياب حصة ' + sub.name, students.length + ' طالب من غير حضور أو غياب · ' + E.fmtDate(o.date) + ' ' + E.fmtTime(o.time) + ' — اضغط وسجّل', location.pathname + '#/session/' + encodeURIComponent(o.key), k);
+      break;
     }
   }
   localStorage.setItem('hesasy-rem', JSON.stringify(r));
@@ -354,16 +370,58 @@ function setupUpdates() {
   }).catch(() => {});
 }
 
+/* ---------- استرجاع تلقائي لو البيانات اختفت ---------- */
+async function findRecovery() {
+  let best = null;
+  const list = await Backup.list();
+  const b = list.find(x => x.students || x.groups);
+  if (b) best = { at: b.at, students: b.students, label: 'نسخة داخلية', load: async () => (await Backup.get(b.id)).data };
+  if (window.Native && Native.readLatestBackup) {
+    try {
+      const j = await Native.readLatestBackup();
+      if (j && j.data && (j.data.students || []).length && (!best || (j.at || '') > best.at)) best = { at: j.at, students: j.data.students.length, label: 'نسخة من ذاكرة الموبايل', load: async () => j.data };
+    } catch (e) {}
+  }
+  return best;
+}
+function offerRecovery() {
+  const R = App.recovery; App.recovery = null;
+  if (!R || App.st.students.length || App.st.groups.length) return;
+  const s = sheet(`<div class="alarm-ic">${ic('alert', 40)}</div><h2 style="text-align:center">التطبيق فاضي!</h2>
+    <div class="banner amber">${ic('info', 18)}<span>مفيش بيانات دلوقتي، بس لقينا <b>${esc(R.label)}</b> بتاريخ <b>${E.fmtDate(R.at.slice(0, 10))}</b> فيها <b>${R.students} طالب</b>.</span></div>
+    <div class="grid2"><button class="btn ghost" data-close>لا، ابدأ فاضي</button><button class="btn accent" id="rc-ok">${ic('upload', 18)} استرجعها</button></div>`, { center: true, sticky: true });
+  $('#rc-ok', s.el).onclick = async () => {
+    try { const data = await R.load(); s.close(); await applyRestore(data); go('home'); render(); toast(`البيانات رجعت: ${(data.students || []).length} طالب`, { sound: 'ok', ms: 5000 }); }
+    catch (e) { toast('مقدرناش نسترجع النسخة: ' + esc(e.message || e), { type: 'err', sound: 'err' }); }
+  };
+}
+window.onStoreFail = () => toast('<b>مساحة الموبايل مليانة — التعديلات مش بتتحفظ!</b> فضّي مساحة واعمل نسخة احتياطية', { type: 'err', sound: 'err', ms: 12000 });
+
 /* ---------- التشغيل ---------- */
 (async function boot() {
   if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.IS_NATIVE) setupUpdates();
   Store.persist();
-  let saved = null;
-  try { saved = await Store.load(); } catch (e) {}
+  let saved = null, loadErr = null;
+  for (let i = 0; i < 3; i++) {
+    try { saved = await Store.load(); loadErr = null; break; } catch (e) { loadErr = e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+  }
+  if (loadErr) {
+    // مقدرناش نقرا البيانات: مش هنفتح التطبيق فاضي علشان أي تعديل ميكتبش فوق البيانات القديمة
+    Store.blocked = true;
+    $('#splash') && $('#splash').remove();
+    $('#lock-root').innerHTML = `<div class="lock"><div class="alarm-ic">${ic('alert', 40)}</div><h1 style="text-align:center">مقدرناش نقرا البيانات</h1>
+      <div style="max-width:340px;text-align:center;color:var(--on-ink-muted);line-height:1.8">بياناتك غالبًا لسه موجودة — التطبيق اتقفل للحماية علشان مايكتبش حاجة فوقها.<br>اقفل التطبيق خالص وافتحه تاني. لو المشكلة فضلت، استرجع آخر نسخة احتياطية.</div>
+      <button class="btn accent lg" style="width:100%;max-width:340px" onclick="location.reload()">${ic('refresh', 20)} حاول تاني</button></div>`;
+    return;
+  }
   if (!location.hash || location.hash === '#/home' || location.hash === '#/exit-guard') { history.replaceState(null, '', '#/exit-guard'); history.pushState(null, '', '#/home'); }
   App.st = migrate(saved);
   recompute();
   App.sec = await Security.get();
+  // التطبيق فاضي بس كان متستخدم قبل كده (فيه باسورد) → دوّر على آخر نسخة فيها بيانات واعرض استرجاعها
+  if (App.sec.pin && !App.st.students.length && !App.st.groups.length) {
+    try { App.recovery = await findRecovery(); } catch (e) {}
+  }
   $('#tabbar').innerHTML = TABS.map(t => `<a href="#/${t.r}" data-r="${t.r}"><span class="pill">${ic(t.icon, 22)}</span>${t.label}</a>`).join('');
   applyIdentity();
   $('#splash') && $('#splash').remove();

@@ -281,7 +281,12 @@ const PAYTAG = r => r.oldDue > 0 ? `<span class="chip red">عليه ${money(r.du
   : r.pay === 'unpaid' ? `<span class="chip red">مدفعش ${money(r.curDue)}</span>` : '<span class="chip gray">لسه</span>';
 function groupMonthRows(gid) {
   const st = App.st;
-  return groupMembers(gid).map(({ student: s, enrollment: e }) => ({ student: s, enrollment: e, ...E.monthStatus(st, s, e, App.C.ledgers.get(s.id)) }));
+  const rows = groupMembers(gid).map(({ student: s, enrollment: e }) => ({ student: s, enrollment: e, ...E.monthStatus(st, s, e, App.C.ledgers.get(s.id)) }));
+  // أكتر عدد حصص متكرر في المجموعة → اللي أقل منه "ورا زمايله"
+  const c = new Map(); rows.forEach(r => { if (r.n) c.set(r.n, (c.get(r.n) || 0) + 1); });
+  let mode = 0, best = 0; c.forEach((v, k) => { if (v > best || (v === best && k > mode)) { best = v; mode = k; } });
+  rows.forEach(r => { r.lag = mode && rows.length > 2 && r.n ? r.n - mode : 0; });
+  return rows;
 }
 const slots = r => `<span class="mslots">${r.cur.concat(r.coming).slice(0, 4).map(x => `<span class="ms ${x.mark}"><b>${x.mark === 'p' ? '✓' : x.mark === 'a' ? '✗' : x.mark === 'none' ? '–' : ''}</b><i>${E.parse(x.date).getDate()}/${E.parse(x.date).getMonth() + 1}</i></span>`).join('')}</span>`;
 function monthsTab(g) {
@@ -326,11 +331,11 @@ function monthsTab(g) {
           if (r.stage === 'new') line = r.next ? 'أول حصة ليه ' + E.fmtDate(r.next) : 'مفيش حصص جاية';
           else if (r.stage === 'done') line = `خلص الشهر ${r.cycle}${r.next ? ` · الشهر ${r.cycle + 1} يبدأ ${E.fmtDate(r.next)}${r.price ? ' (+' + money(r.price) + ')' : ''}` : ''}`;
           else line = `الشهر ${r.cycle} · حصة ${r.pos} من 4${r.nextMonthAt ? ' · شهره الجديد ' + E.fmtShort(r.nextMonthAt) : ''}`;
-          return `<div class="mrow">
+          return `<div class="mrow ${r.cycle ? 'tint cy' + ((r.cycle - 1) % 4) : ''}">
             <a class="row tap" href="#/student/${s.id}" style="gap:10px;text-decoration:none;color:inherit;min-width:0;flex:1">
               <span class="avatar ${r.due > 0 ? 'red' : r.pay === 'paid' ? 'green' : ''}" style="width:38px;height:38px">${esc(initial(s.name))}</span>
               <span class="grow stack" style="gap:5px;min-width:0"><span class="row between" style="gap:6px"><span class="b ellipsis">${esc(s.name)}</span>${PAYTAG(r)}</span>
-                <span class="small muted">${line}</span>${slots(r)}</span></a>
+                <span class="small muted">${r.cycle ? `<span class="cy-tag">ش${r.cycle}</span> ` : ''}${line}${r.lag ? ` · <b style="color:${r.lag < 0 ? 'var(--red)' : 'var(--blue-text)'}">${r.lag < 0 ? 'ورا زمايله' : 'قدامهم'} بـ ${Math.abs(r.lag)} ${Math.abs(r.lag) === 1 ? 'حصة' : 'حصص'}</b>` : ''}</span>${slots(r)}</span></a>
             ${r.due > 0 ? `<div class="row" style="gap:6px;margin-top:8px;padding-inline-start:48px"><button class="btn sm ghost" data-act="pay" data-s="${s.id}" style="min-height:34px">${ic('plus', 15, 2.4)} دفعة</button>${s.phone ? `<button class="btn sm green" data-act="waStudent" data-s="${s.id}" style="min-height:34px">${ic('chat', 15)} تذكير</button>` : ''}</div>` : ''}
           </div>`;
         }).join('')}</div></section>`;

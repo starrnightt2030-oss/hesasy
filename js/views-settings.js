@@ -28,11 +28,12 @@ Views.settings = () => {
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">قواعد مشروع التخرج</h2>
       <div class="card tight">
-        <div class="set-row" style="flex-direction:column;align-items:stretch;gap:8px"><span class="stack"><span class="b">خصم الغياب في الشهر</span><span class="small muted">درجات بتتخصم عن كل غياب (الأول، التاني، التالت، الرابع)</span></span>
+        <label class="set-row"><span class="stack"><span class="b">درجة السؤال الافتراضية</span><span class="small muted">تقدر تغيرها لكل سؤال لوحده</span></span><input class="input sm num" type="number" inputmode="decimal" value="${E.projRules(st).maxQ}" data-change="setProj" data-k="maxQ" style="width:72px;text-align:center;font-weight:700"></label>
+        <div class="set-row" style="flex-direction:column;align-items:stretch;gap:8px"><span class="stack"><span class="b">خصم الغياب في الشهر</span><span class="small muted">درجات بتتخصم من درجة الطالب (من ١٠٠) عن كل غياب في الشهر: الأول، التاني، التالت، الرابع</span></span>
           <div class="grid3" style="grid-template-columns:repeat(4,minmax(0,1fr))">${E.projRules(st).steps.map((v, i) => `<label class="stack small muted" style="gap:4px;text-align:center">${['الأول', 'التاني', 'التالت', 'الرابع'][i]}<input class="input sm num" type="number" inputmode="numeric" value="${v}" data-change="setProj" data-k="step${i}" style="text-align:center;font-weight:700"></label>`).join('')}</div></div>
         <div class="set-row"><span class="stack"><span class="b">سماح غياب مرة واحدة</span><span class="small muted">لو غاب مرة واحدة بس في الشهر ميتخصمش منه</span></span><button class="switch" role="switch" aria-checked="${E.projRules(st).forgive}" aria-label="سماح غياب مرة واحدة" data-act="tForgive"></button></div>
-        <label class="set-row"><span class="stack"><span class="b">تأخير التسليم لحد ${E.projRules(st).lateDays} أيام</span><span class="small muted">نسبة الخصم من درجة السؤال</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateWeek}" data-change="setProj" data-k="lateWeek" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></label>
-        <label class="set-row"><span class="stack"><span class="b">تأخير أكتر من ${E.projRules(st).lateDays} أيام</span><span class="small muted">نسبة الخصم من درجة السؤال</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateAfter}" data-change="setProj" data-k="lateAfter" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></label>
+        <div class="set-row"><span class="stack"><span class="b">أول ميعاد تأخير (افتراضي): لحد <input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateDays}" data-change="setProj" data-k="lateDays" style="width:56px;display:inline-block;text-align:center;font-weight:700;min-height:34px;padding:0 4px"> أيام</span><span class="small muted">بيتملى تلقائي في أي سؤال جديد · نسبة الخصم</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateWeek}" data-change="setProj" data-k="lateWeek" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></div>
+        <label class="set-row"><span class="stack"><span class="b">بعد آخر ميعاد (افتراضي)</span><span class="small muted">نسبة الخصم من درجة السؤال</span></span><span class="row" style="gap:6px"><input class="input sm num" type="number" inputmode="numeric" value="${E.projRules(st).lateAfter}" data-change="setProj" data-k="lateAfter" style="width:72px;text-align:center;font-weight:700"><span class="sm muted">٪</span></span></label>
       </div></section>
 
     <section style="display:flex;flex-direction:column;gap:8px"><h2 class="label-sm">السنة الدراسية والإجازات</h2>
@@ -52,6 +53,7 @@ Views.settings = () => {
           <select class="input select sm" style="width:120px" data-change="setBefore">${[10, 15, 30, 45, 60, 90].map(m => `<option value="${m}" ${R.before === m ? 'selected' : ''}>قبلها ${m} د</option>`).join('')}</select></label>
         ${sw('tDaily', R.daily, 'ملخص اليوم', 'أول ما تفتح التطبيق كل يوم')}
         ${sw('tOverdue', R.overdue, 'تنبيه المتأخرات', 'صوت وحركة لما يكون فيه طلاب متأخرين')}
+        ${sw('tMissing', R.missing !== false, 'تنبيه الغياب اللي متسجلش', 'إشعار بعد الحصة بساعة لو نسيت تسجل الغياب، وتذكير بالليل بالحصص الناقصة')}
         ${sw('tSound', R.sound, 'الأصوات', 'أصوات التنبيهات والتأكيد')}
         <div class="set-row"><span class="stack"><span class="b">إشعارات الموبايل</span><span class="small muted">${notif === 'granted' ? 'مفعّلة' : notif === 'denied' ? 'مقفولة من إعدادات المتصفح' : notif === 'unsupported' ? 'مش مدعومة على الجهاز ده' : 'اسمح للتطبيق يبعت إشعارات'}</span></span>
           ${notif === 'default' ? '<button class="btn sm" data-act="askNotif">تفعيل</button>' : notif === 'granted' ? '<span class="chip green">مفعّلة</span>' : ''}</div>
@@ -135,7 +137,11 @@ ACT.setProj = el => {
   commit(st => {
     const p = st.settings.project = Object.assign({}, E.projRules(st), st.settings.project || {});
     p.steps = p.steps.slice();
-    if (el.dataset.k.startsWith('step')) p.steps[+el.dataset.k.slice(4)] = v; else p[el.dataset.k] = Math.min(100, v);
+    const k = el.dataset.k;
+    if (k.startsWith('step')) p.steps[+k.slice(4)] = v;
+    else if (k === 'lateDays') p.lateDays = Math.max(1, Math.round(v));
+    else if (k === 'maxQ') p.maxQ = Math.max(0.5, v);
+    else p[k] = Math.min(100, v);
   }, 'اتحفظ');
 };
 ACT.tForgive = () => commit(st => { const p = st.settings.project = Object.assign({}, E.projRules(st), st.settings.project || {}); p.forgive = !p.forgive; });
@@ -150,6 +156,7 @@ ACT.addHoliday = () => {
 ACT.delHoliday = el => commit(st => st.settings.holidays.splice(+el.dataset.i, 1), 'الإجازة اتشالت', { type: 'warn' });
 ACT.setBefore = el => commit(st => { st.settings.reminders.before = +el.value; }, 'اتحفظ');
 ACT.tDaily = () => commit(st => { st.settings.reminders.daily = !st.settings.reminders.daily; });
+ACT.tMissing = () => commit(st => { st.settings.reminders.missing = st.settings.reminders.missing === false; });
 ACT.tOverdue = () => commit(st => { st.settings.reminders.overdue = !st.settings.reminders.overdue; });
 ACT.tSound = () => commit(st => { st.settings.reminders.sound = !st.settings.reminders.sound; });
 ACT.testSound = el => Sound.play(el.dataset.k, true);
@@ -291,7 +298,7 @@ ACT.driveRestore = async el => {
 Views.backups = () => `
   <header class="plain-head">${backBtn('#/settings')}<h1>النسخ الاحتياطية</h1></header>
   <main class="pad">
-    <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي جوه التطبيق (آخر ${Backup.KEEP}). قبل الاسترجاع هتشوف عدد الطلاب والدفعات اللي في النسخة، والاسترجاع محتاج باسورد الأدمن.</span></div>
+    <div class="banner blue">${ic('info', 18)}<span>دي النسخ اللي جوه التطبيق (آخر ${Backup.KEEP_DAILY} أيام + النسخ اللي بتتعمل قبل وبعد الاسترجاع والتصفير). قبل الاسترجاع هتشوف عدد الطلاب والدفعات اللي في النسخة، والاسترجاع محتاج باسورد الأدمن.</span></div>
     <div id="bk-list" class="card tight"><div class="sm muted" style="padding:14px 0">بيحمّل…</div></div>
     <button class="btn" data-act="backupNow">${ic('refresh', 18)} اعمل نسخة دلوقتي</button>
     ${Drive.configured() ? `<a class="btn lg" href="#/drive">${ic('upload', 20)} استرجاع من Google Drive</a>` : ''}

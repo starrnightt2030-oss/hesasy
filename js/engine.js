@@ -65,7 +65,7 @@
           { id: 't2', name: 'الترم الثاني', start: (sy + 1) + '-02-01', end: (sy + 1) + '-06-15' }
         ],
         holidays: [],
-        reminders: { before: 30, daily: true, overdue: true, sound: true },
+        reminders: { before: 30, daily: true, overdue: true, sound: true, missing: true },
         privacy: { hide: true },
         backup: { lastAuto: null, lastFolder: null, lastDownload: null, daily: true, time: '21:00', lastCloud: null, driveClient: '', driveFolder: '', driveEmail: '' }
       },
@@ -240,22 +240,93 @@
     return out;
   }
 
+  /* ---------- عرض الصف الثاني = مطالبة واحدة ----------
+   * الأربع مواد بيتحسبوا شهر بشهر كـ"فاتورة" واحدة بسعر العرض (700) بدل ٤ مطالبات منفصلة.
+   * الشهر رقم j في العرض لكل مادة بيتجمع مع الشهر j للمواد التانية، وأول ما أي مادة تبدأ شهرها
+   * الجديد في العرض، المطالبة بتنزل كاملة (المواد اللي لسه حصتها مجتش بتتحسب "pending"). */
+  const isG2Bundle = c => c.bundle && SUBJ[c.subjectId] && SUBJ[c.subjectId].grade === 2;
+  function buildBills(st, s, charges, asOf) {
+    const series = new Map();                       // enrollmentId -> عدد شهور العرض
+    const bills = [];
+    const bundleBills = [];
+    for (const c of charges) {
+      if (!isG2Bundle(c)) { bills.push({ id: 's:' + c.id, kind: 'single', date: c.date, parts: [c], j: 0 }); continue; }
+      const j = (series.get(c.enrollmentId) || 0) + 1;
+      series.set(c.enrollmentId, j);
+      c.bj = j;
+      let b = bundleBills[j - 1];
+      if (!b) { b = bundleBills[j - 1] = { id: 'b:' + s.id + '#' + j, kind: 'bundle', grade: 2, date: c.date, parts: [], j }; bills.push(b); }
+      b.parts.push(c);
+      if (c.date < b.date) b.date = c.date;
+    }
+    // آخر شهر في العرض: المواد اللي لسه شهرها مبدأش بتنزل معاه
+    const last = bundleBills[bundleBills.length - 1];
+    if (last) {
+      for (const e of s.enrollments) {
+        const sub = SUBJ[e.subjectId];
+        if (!sub || sub.grade !== 2 || (e.endDate && e.endDate <= asOf) || firstChargeDate(s, e) > asOf) continue;
+        if (last.parts.some(c => c.enrollmentId === e.id)) continue;
+        if ((series.get(e.id) || 0) !== last.j - 1) continue;
+        const pr = priceFor(st, s, e, last.date);
+        if (!pr.bundle) continue;
+        const k = charges.filter(x => x.enrollmentId === e.id).length + 1;
+        const c = { id: e.id + '#' + k, studentId: s.id, enrollmentId: e.id, subjectId: e.subjectId, groupId: currentGroupId(e), cycle: k, date: last.date,
+          amount: pr.price, price: pr.price, held: 0, latest: true, partial: false, bundle: true, ended: false, pending: true, bj: last.j };
+        last.parts.push(c);
+        charges.push(c);
+      }
+    }
+    for (const b of bundleBills) {
+      b.latest = b === last && b.parts.some(c => !c.ended);
+      b.parts.forEach(c => { c.latest = b.latest; c.billId = b.id; });
+      b.parts.sort((x, y) => x.subjectId.localeCompare(y.subjectId));
+    }
+    for (const b of bills) {
+      b.amount = b.parts.reduce((t, c) => t + c.amount, 0);
+      if (b.kind === 'single') { b.latest = b.parts[0].latest; b.parts[0].billId = b.id; }
+      b.held = Math.max(...b.parts.map(c => c.held));
+      b.partial = b.parts.some(c => c.partial);
+      b.cycle = b.kind === 'single' ? b.parts[0].cycle : b.j;
+      b.subjectIds = b.parts.map(c => c.subjectId);
+    }
+    bills.sort((a, b) => a.date.localeCompare(b.date) || a.cycle - b.cycle || (a.subjectIds[0] || '').localeCompare(b.subjectIds[0] || ''));
+    return bills;
+  }
+  function billLabel(b) {
+    if (b.kind === 'bundle') return 'عرض الصف الثاني (' + b.parts.length + ' مواد)';
+    return (SUBJ[b.subjectIds[0]] || {}).name || '—';
+  }
+  function billShort(b) {
+    if (b.kind === 'bundle') return 'عرض الصف الثاني';
+    return (SUBJ[b.subjectIds[0]] || {}).short || '—';
+  }
+
   function studentLedger(st, s, asOf) {
     asOf = asOf || today();
-    const charges = s.enrollments
-      .flatMap(e => enrollmentCharges(st, s, e, asOf))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.cycle - b.cycle || a.subjectId.localeCompare(b.subjectId));
+    const charges = s.enrollments.flatMap(e => enrollmentCharges(st, s, e, asOf));
+    const bills = buildBills(st, s, charges, asOf);
+    charges.sort((a, b) => a.date.localeCompare(b.date) || a.cycle - b.cycle || a.subjectId.localeCompare(b.subjectId));
     const pays = st.payments.filter(p => p.studentId === s.id).sort((a, b) => a.date.localeCompare(b.date));
     const paidSum = pays.reduce((t, p) => t + (+p.amount || 0), 0);
     let pool = paidSum;
-    for (const c of charges) { c.paid = Math.min(c.amount, pool); pool -= c.paid; c.due = c.amount - c.paid; }
+    // الدفع بيتوزع على الفواتير من الأقدم للأحدث، وجوه فاتورة العرض بيتقسم على المواد بالنسبة
+    for (const b of bills) {
+      b.paid = Math.min(b.amount, pool); pool -= b.paid; b.due = b.amount - b.paid;
+      let left = b.paid;
+      b.parts.forEach((c, i) => {
+        const share = i === b.parts.length - 1 ? left : Math.min(c.amount, Math.round(b.paid * c.amount / (b.amount || 1)));
+        c.paid = Math.max(0, Math.min(c.amount, share)); left -= c.paid; c.due = c.amount - c.paid;
+      });
+      for (const c of b.parts) { if (left <= 0) break; const add = Math.min(left, c.due); c.paid += add; c.due -= add; left -= add; }
+    }
     const total = charges.reduce((t, c) => t + c.amount, 0);
     const late = charges.filter(c => !c.latest).reduce((t, c) => t + c.due, 0);
     const current = charges.filter(c => c.latest).reduce((t, c) => t + c.due, 0);
     const balance = total - paidSum;
     let status = 'clear';
     if (late > 0) status = 'late'; else if (current > 0) status = 'current'; else if (balance < 0) status = 'credit';
-    return { student: s, charges, payments: pays, total, paid: paidSum, balance, due: Math.max(0, balance), credit: Math.max(0, -balance), late, current, status };
+    const partPaid = bills.some(b => b.paid > 0 && b.due > 0);
+    return { student: s, charges, bills, payments: pays, total, paid: paidSum, balance, due: Math.max(0, balance), credit: Math.max(0, -balance), late, current, status, partPaid };
   }
 
   /* موقع الطالب في الدورة عند حصة معينة: "حصة 3 من 4" */
@@ -348,7 +419,7 @@
   }
 
   /* ---------- مشروع التخرج: خصم الغياب وتقييم الأسئلة ---------- */
-  const PROJ_DEFAULT = { steps: [5, 10, 15, 20], forgive: true, lateDays: 7, lateWeek: 25, lateAfter: 50, maxQ: 10 };
+  const PROJ_DEFAULT = { steps: [5, 10, 15, 20], forgive: true, lateDays: 7, lateWeek: 25, lateAfter: 50, maxQ: 10, total: 100 };
   const projRules = st => Object.assign({}, PROJ_DEFAULT, (st.settings && st.settings.project) || {});
   const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
   const round2 = n => Math.round(n * 100) / 100;
@@ -403,21 +474,76 @@
     }
     return out.sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
   }
-  /* درجة السؤال بعد خصم التأخير: في الميعاد كاملة، أول أسبوع بعده −ربع الدرجة، بعد كده −نصها */
+  /* مواعيد التأخير ونسب الخصم لكل سؤال:
+   * q.tiers = [{until:'YYYY-MM-DD', pct}] بالترتيب، و q.after = نسبة الخصم بعد آخر ميعاد.
+   * لو السؤال قديم ومفيهوش tiers بنستخدم القاعدة العامة (لحد X أيام −٪، بعد كده −٪). */
+  function questionTiers(st, q) {
+    const R = projRules(st);
+    if (Array.isArray(q.tiers) && q.tiers.length) {
+      const tiers = q.tiers.filter(t => t && t.until).map(t => ({ until: t.until, pct: Math.max(0, Math.min(100, +t.pct || 0)) })).sort((a, b) => a.until.localeCompare(b.until));
+      return { tiers, after: Math.max(0, Math.min(100, q.after == null ? R.lateAfter : +q.after)) };
+    }
+    if (!q.due) return { tiers: [], after: 0 };
+    return { tiers: [{ until: addDays(q.due, R.lateDays), pct: R.lateWeek }], after: R.lateAfter };
+  }
+  /* درجة السؤال بعد خصم التأخير: في الميعاد كاملة، وبعده حسب مواعيد ونسب السؤال */
   function questionResult(st, q, rec) {
     if (!rec || rec.raw == null || rec.raw === '') return null;
     const R = projRules(st);
     const max = +q.max || R.maxQ;
     const raw = Math.max(0, Math.min(max, +rec.raw));
     const late = q.due ? Math.max(0, diffDays(q.due, rec.date)) : 0;
-    const pct = late === 0 ? 0 : late <= R.lateDays ? R.lateWeek : R.lateAfter;
-    return { raw, max, date: rec.date, late, pct, minus: round2(raw * pct / 100), final: round2(raw * (1 - pct / 100)) };
+    let pct = 0, tier = 0;
+    if (late > 0) {
+      const T = questionTiers(st, q);
+      const i = T.tiers.findIndex(t => rec.date <= t.until);
+      if (i >= 0) { pct = T.tiers[i].pct; tier = i + 1; } else { pct = T.after; tier = T.tiers.length + 1; }
+    }
+    return { raw, max, date: rec.date, late, pct, tier, minus: round2(raw * pct / 100), final: round2(raw * (1 - pct / 100)) };
   }
   function studentQuestions(st, s) {
     return (st.questions || []).map(q => {
       const inIt = projectRoster(st, q.groupIds, q.created).some(x => x.student.id === s.id);
       return { q, inIt, res: questionResult(st, q, (st.qgrades || {})[q.id + '|' + s.id]) };
     }).filter(x => x.inIt || x.res);
+  }
+
+  /* ---------- درجات مشروع التخرج من ١٠٠ ----------
+   * الدرجة = مجموع درجات الأسئلة بعد خصم التأخير − خصم الغياب كل شهر (حسب نسب الغياب في الإعدادات).
+   * كل سؤال بيتحسب في الشهر اللي ميعاد تسليمه جواه (الشهر = ٤ حصص محسوبة). */
+  function projectReport(st, s, asOf) {
+    asOf = asOf || today();
+    const R = projRules(st);
+    const cy = projectCycles(st, s, asOf);
+    const qs = studentQuestions(st, s).filter(x => x.inIt || x.res);
+    const months = cy.map((c, i) => ({ n: c.n, from: c.from, to: c.to, upTo: cy[i + 1] ? cy[i + 1].from : null, cycle: c, abs: c.abs, deduction: c.deduction, forgiven: c.forgiven, complete: c.complete, qs: [] }));
+    if (!months.length && qs.length) months.push({ n: 1, from: null, to: null, upTo: null, cycle: null, abs: 0, deduction: 0, forgiven: false, complete: false, qs: [] });
+    for (const x of qs) {
+      const d = x.q.due || '';
+      let m = months.find(m => (!m.upTo || d < m.upTo));
+      if (!m) m = months[months.length - 1];
+      if (m) m.qs.push(x);
+    }
+    let lost = 0;
+    months.forEach(m => {
+      m.attLost = m.deduction;
+      lost += m.attLost;
+      m.qGot = round2(m.qs.reduce((a, x) => a + (x.res ? x.res.final : 0), 0));
+      m.qMax = m.qs.reduce((a, x) => a + (+x.q.max || R.maxQ), 0);
+      m.qMissing = m.qs.filter(x => !x.res).length;
+      m.qLateMinus = round2(m.qs.reduce((a, x) => a + (x.res ? x.res.minus : 0), 0));
+      m.lostAll = round2(m.attLost + m.qLateMinus);
+    });
+    const qMax = qs.reduce((a, x) => a + (+x.q.max || R.maxQ), 0);
+    const qGot = round2(qs.reduce((a, x) => a + (x.res ? x.res.final : 0), 0));
+    return { months, qs, attLost: lost, qMax, qGot, total: round2(Math.max(0, qGot - lost)), outOf: qMax, target: R.total || 100 };
+  }
+  /* مجموع درجات كل الأسئلة المقررة على مجموعة (أو الكل)، علشان نتأكد إنه ١٠٠ */
+  function projectPlan(st, gid) {
+    const R = projRules(st);
+    const qs = (st.questions || []).filter(q => !gid || !q.groupIds || !q.groupIds.length || q.groupIds.includes(gid));
+    const qMax = qs.reduce((a, q) => a + (+q.max || R.maxQ), 0);
+    return { qs: qs.length, qMax, sum: qMax, target: R.total || 100 };
   }
 
   /* ---------- شهور المجموعة (كل ٤ حصص محسوبة = شهر) ----------
@@ -682,9 +808,9 @@
     SUBJECTS, SUBJ, GRADES, WEEK, DAY_NAMES, MONTHS, METHODS, payMethod, payLabel,
     iso, parse, addDays, dow, today, monthKey, monthStart, monthEnd, addMonths, monthName, monthLabel, weekStart, fmtDate, fmtShort, fmtTime,
     defaultState, uid, setNow, regDate, firstChargeDate, isActiveDay, termOf, groupById, groupScheduleAt, currentSchedule, groupLabel, occurrences, sessionByKey,
-    groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger,
+    groupOfEnrollment, currentGroupId, isEnrollmentActive, enrollmentSessions, priceFor, monthlyTotal, enrollmentCharges, studentLedger, billLabel, billShort,
     cyclePosition, computeAll, periodSummary, groupDues, studentsInSession, sessionsOnDay, projectStudents, icsFor,
-    missingAttendance, cycleEvents, monthStatus, PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, studentQuestions, dueAlerts,
+    missingAttendance, cycleEvents, monthStatus, PROJ_DEFAULT, projRules, diffDays, absenceDeduction, projectCycles, projectRoster, questionResult, questionTiers, studentQuestions, projectReport, projectPlan, dueAlerts,
     groupAttendance, groupAnchor, groupCycles, enrollmentInGroup, groupCycleSummary, transferPreview, transferEnrollment
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Engine = E;
